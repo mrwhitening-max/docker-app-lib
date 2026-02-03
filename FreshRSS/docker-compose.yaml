@@ -19,7 +19,7 @@ services:
       options:
         max-size: 10m
     volumes:
-      - data:/var/www/FreshRSS/data
+      - /root/freshrss-data:/var/www/FreshRSS/data
       - extensions:/var/www/FreshRSS/extensions
     environment:
       TZ: Europe/Paris
