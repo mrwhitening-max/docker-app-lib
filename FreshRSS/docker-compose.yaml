@@ -13,6 +13,8 @@ services:
     container_name: freshrss
     hostname: freshrss
     restart: unless-stopped
+    ports:
+      - 9009:80
     logging:
       options:
         max-size: 10m
