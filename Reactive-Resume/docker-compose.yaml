@@ -94,7 +94,7 @@ services:
     volumes:
       - reactive_resume_data:/app/data
     ports:
-      - "3001:3000"
+      - "3000:3000"
     depends_on:
       postgres:
         condition: service_healthy
