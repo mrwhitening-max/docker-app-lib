@@ -10,7 +10,7 @@ services:
       # KRITISCH: Festen Secret Key setzen
       - LANGFLOW_SECRET_KEY=${LANGFLOW_SECRET_KEY}
       - LANGFLOW_SUPERUSER_USERNAME=admin
-      - LANGFLOW_SUPERUSER_PASSWORD=${LANGFLOW_SECRET_KEY}
+      - LANGFLOW_SUPERUSER_PASSWORD=${LANGFLOW_SUPERUSER_PASSWORD}
       - LANGFLOW_AUTO_LOGIN=true
     volumes:
       - /data/langflow-data:/app/langflow
