@@ -8,8 +8,8 @@ services:
       - "443:443"    # HTTPS
       - "81:81"      # Admin Web Interface
     volumes:
-      - npm-data:/data
-      - npm-letsencrypt:/etc/letsencrypt
+      - /data/nginx-proxy-manager/data:/data
+      - /data/nginx-proxy-manager/letsencrypt:/etc/letsencrypt
     environment:
       - TZ=Europe/Berlin
       # Optional: MySQL statt SQLite (für bessere Performance)
