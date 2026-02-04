@@ -2,7 +2,7 @@ name: reactive_resume
 
 services:
   postgres:
-    image: postgres:18
+    image: postgres:15.15-bookworm
     restart: unless-stopped
     volumes:
       - postgres_data:/var/lib/postgresql/data
