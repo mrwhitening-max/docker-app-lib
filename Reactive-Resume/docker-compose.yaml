@@ -2,7 +2,7 @@ name: reactive_resume
 
 services:
   postgres:
-    image: postgres:latest
+    image: postgres:18.1
     restart: unless-stopped
     volumes:
       - postgres_data:/var/lib/postgresql/data
