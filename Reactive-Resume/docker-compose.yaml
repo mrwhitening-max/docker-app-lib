@@ -15,7 +15,7 @@ services:
       start_period: 10s
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 200
 
   browserless:
     image: ghcr.io/browserless/chromium:latest
@@ -30,7 +30,7 @@ services:
         ["CMD", "curl", "-f", "http://localhost:3000/pressure?token=1234567890"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 200
 
   # As an alternative to browserless, you can also use a lightweight image like chromedp/headless-shell:latest
   # See https://docs.rxresu.me/self-hosting/docker#alternative-printer-options for more information.
@@ -108,7 +108,7 @@ services:
       start_period: 10s
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 200
 
 volumes:
   postgres_data:
