@@ -1,0 +1,83 @@
+services:
+  # Socket Proxy für erhöhte Sicherheit
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy
+    container_name: socket-proxy
+    restart: unless-stopped
+    environment:
+      # Minimal benötigte Permissions für Traefik
+      - CONTAINERS=1
+      - SERVICES=1
+      - NETWORKS=1
+      - TASKS=1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - socket-proxy
+    security_opt:
+      - no-new-privileges:true
+
+  traefik:
+    image: traefik:v3.3
+    container_name: traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - proxy
+      - socket-proxy
+    ports:
+      - "80:80"     # HTTP
+      - "443:443"   # HTTPS
+      # - "8080:8080" # Dashboard (nur für Entwicklung)
+    environment:
+      - TZ=Europe/Berlin
+      # Let's Encrypt Email (anpassen!)
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}  # Falls Cloudflare DNS Challenge
+    volumes:
+      # Konfiguration
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./dynamic:/etc/traefik/dynamic:ro
+      # Zertifikate (persistent!)
+      - traefik-certificates:/letsencrypt
+      # Logs
+      - ./logs:/var/log/traefik
+    labels:
+      - "traefik.enable=true"
+
+      # Dashboard (mit Auth)
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.yourdomain.com`)"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls=true"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.middlewares=dashboard-auth"
+
+      # BasicAuth für Dashboard (User: admin, Pass: changeme)
+      # Generiere mit: echo $(htpasswd -nb admin changeme) | sed -e s/\\$/\\$\\$/g
+      - "traefik.http.middlewares.dashboard-auth.basicauth.users=admin:$$apr1$$8EVjn/nj$$GiLUZqcbueTFeD23SuB6x0"
+
+  # Beispiel-Service zum Testen
+  whoami:
+    image: traefik/whoami
+    container_name: whoami
+    restart: unless-stopped
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.whoami.rule=Host(`whoami.yourdomain.com`)"
+      - "traefik.http.routers.whoami.entrypoints=websecure"
+      - "traefik.http.routers.whoami.tls=true"
+      - "traefik.http.routers.whoami.tls.certresolver=letsencrypt"
+      - "traefik.http.services.whoami.loadbalancer.server.port=80"
+
+networks:
+  proxy:
+    name: proxy
+    external: true
+  socket-proxy:
+    internal: true
+
+volumes:
+  traefik-certificates:
