@@ -1,13 +1,14 @@
 services:
   langflow:
     image: langflowai/langflow:latest
+    container_name: langflow
     ports:
       - "7860:7860"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     environment:
-      - LANGFLOW_DATABASE_URL=postgresql://langflow:langflow@postgres:5432/langflow
-      # KRITISCH: Festen Secret Key setzen
+      - LANGFLOW_DATABASE_URL=postgresql://langflow:${POSTGRES_PASSWORD}@postgres:5432/langflow
       - LANGFLOW_SECRET_KEY=${LANGFLOW_SECRET_KEY}
       - LANGFLOW_SUPERUSER_USERNAME=admin
       - LANGFLOW_SUPERUSER_PASSWORD=${LANGFLOW_SUPERUSER_PASSWORD}
@@ -15,7 +16,8 @@ services:
     volumes:
       - /data/langflow-data:/app/langflow
     restart: unless-stopped
-    # Healthcheck hinzuf  gen
+    networks:
+      - langflow-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:7860/health"]
       interval: 30s
@@ -25,21 +27,22 @@ services:
 
   postgres:
     image: postgres:16
+    container_name: langflow-postgres
     environment:
-      POSTGRES_USER: langflow
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: langflow
-    ports:
-      - "5432:5432"
+      - POSTGRES_USER=langflow
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=langflow
     volumes:
       - /data/langflow-postgres:/var/lib/postgresql/data
     restart: unless-stopped
-    # PostgreSQL Healthcheck
+    networks:
+      - langflow-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U langflow"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-volumes:
-  langflow-postgres:
+networks:
+  langflow-network:
+    driver: bridge
