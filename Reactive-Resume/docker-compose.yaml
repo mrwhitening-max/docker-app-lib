@@ -2,21 +2,19 @@ name: reactive_resume
 
 services:
   postgres:
-    image: postgres:latest
+    image: postgres:16-alpine
     restart: unless-stopped
-    user: "0:0"  # ← Als root ausführen
-    environment:
-      - POSTGRES_DB=postgres
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
     volumes:
-      - postgres_data:/var/lib/postgresql
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     healthcheck:
-      test: [ "CMD", "pg_isready", "-U", "postgres", "-d", "postgres" ]
-      start_period: 10s
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   browserless:
     image: ghcr.io/browserless/chromium:latest
