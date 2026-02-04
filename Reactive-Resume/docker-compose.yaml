@@ -2,7 +2,7 @@ name: reactive_resume
 
 services:
   postgres:
-    image: postgres:latest
+    image: postgres:16-alpine
     restart: unless-stopped
     environment:
       - POSTGRES_DB=postgres
