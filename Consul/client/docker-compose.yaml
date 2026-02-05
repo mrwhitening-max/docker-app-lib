@@ -1,6 +1,5 @@
-version: '3.8'
-
 services:
+  # === CONSUL AGENT ===
   consul-agent:
     image: hashicorp/consul:${CONSUL_VERSION:-latest}
     container_name: consul-agent
@@ -8,7 +7,7 @@ services:
     restart: unless-stopped
     network_mode: host
     volumes:
-      - /data/consul-data:/consul/data
+      - consul-data:/consul/data
     configs:
       - source: consul_config
         target: /consul/config/consul.hcl
@@ -16,16 +15,107 @@ services:
       agent
       -config-file=/consul/config/consul.hcl
       -retry-join=${CONSUL_SERVER_IP}
-      -bind={{ GetInterfaceIP "eth0" }}
 
-  registrator:
-    image: gliderlabs/registrator:latest
-    container_name: registrator
-    restart: unless-stopped
+  # === SERVICE REGISTRATOR ===
+  consul-register:
+    image: curlimages/curl:latest
+    container_name: consul-register
+    restart: "no"
     network_mode: host
-    command: -internal consul://localhost:8500
-    volumes:
-      - /var/run/docker.sock:/tmp/docker.sock
+    environment:
+      - CONSUL_HTTP_ADDR=localhost:8500
+      - INTERFACE=${NETWORK_INTERFACE:-eth0}
+      # Service 1 (z.B. n8n, langflow, etc.)
+      - SERVICE_1_NAME=${SERVICE_1_NAME}
+      - SERVICE_1_PORT=${SERVICE_1_PORT}
+      - SERVICE_1_HEALTH_HTTP=${SERVICE_1_HEALTH_HTTP}
+      - SERVICE_1_TAGS=${SERVICE_1_TAGS:-}
+      # Service 2 (z.B. postgres, redis, etc.)
+      - SERVICE_2_NAME=${SERVICE_2_NAME}
+      - SERVICE_2_PORT=${SERVICE_2_PORT}
+      - SERVICE_2_HEALTH_TCP=${SERVICE_2_HEALTH_TCP:-true}
+      - SERVICE_2_TAGS=${SERVICE_2_TAGS:-}
+      # Optional: Service 3
+      - SERVICE_3_NAME=${SERVICE_3_NAME}
+      - SERVICE_3_PORT=${SERVICE_3_PORT}
+      - SERVICE_3_HEALTH_HTTP=${SERVICE_3_HEALTH_HTTP}
+      - SERVICE_3_TAGS=${SERVICE_3_TAGS:-}
+    command: |
+      sh -c '
+        echo "=== Consul Service Registration ==="
+        echo "Detecting LXC IP address..."
+        
+        LXC_IP=$$(ip -4 addr show $$INTERFACE | grep inet | awk "{print \$$2}" | cut -d/ -f1 | head -1)
+        
+        if [ -z "$$LXC_IP" ]; then
+          echo "ERROR: Could not detect IP on $$INTERFACE"
+          echo "Available interfaces:"
+          ip addr show
+          exit 1
+        fi
+        
+        echo "Detected IP: $$LXC_IP on $$INTERFACE"
+        echo "Waiting for Consul Agent..."
+        sleep 10
+        
+        # Register Service 1
+        if [ -n "$$SERVICE_1_NAME" ]; then
+          echo "Registering $$SERVICE_1_NAME..."
+          
+          if [ -n "$$SERVICE_1_HEALTH_HTTP" ]; then
+            HEALTH_CHECK="\"Check\": {\"HTTP\": \"http://$$LXC_IP:$$SERVICE_1_PORT$$SERVICE_1_HEALTH_HTTP\", \"Interval\": \"15s\", \"Timeout\": \"3s\"}"
+          else
+            HEALTH_CHECK="\"Check\": {\"TCP\": \"$$LXC_IP:$$SERVICE_1_PORT\", \"Interval\": \"10s\"}"
+          fi
+          
+          curl -X PUT http://$$CONSUL_HTTP_ADDR/v1/agent/service/register -d "{
+            \"Name\": \"$$SERVICE_1_NAME\",
+            \"Port\": $$SERVICE_1_PORT,
+            \"Address\": \"$$LXC_IP\",
+            \"Tags\": [\"$$SERVICE_1_TAGS\"],
+            $$HEALTH_CHECK
+          }"
+          echo "✓ $$SERVICE_1_NAME registered"
+        fi
+        
+        # Register Service 2
+        if [ -n "$$SERVICE_2_NAME" ]; then
+          echo "Registering $$SERVICE_2_NAME..."
+          
+          curl -X PUT http://$$CONSUL_HTTP_ADDR/v1/agent/service/register -d "{
+            \"Name\": \"$$SERVICE_2_NAME\",
+            \"Port\": $$SERVICE_2_PORT,
+            \"Address\": \"$$LXC_IP\",
+            \"Tags\": [\"$$SERVICE_2_TAGS\"],
+            \"Check\": {\"TCP\": \"$$LXC_IP:$$SERVICE_2_PORT\", \"Interval\": \"10s\"}
+          }"
+          echo "✓ $$SERVICE_2_NAME registered"
+        fi
+        
+        # Register Service 3 (optional)
+        if [ -n "$$SERVICE_3_NAME" ]; then
+          echo "Registering $$SERVICE_3_NAME..."
+          
+          if [ -n "$$SERVICE_3_HEALTH_HTTP" ]; then
+            HEALTH_CHECK="\"Check\": {\"HTTP\": \"http://$$LXC_IP:$$SERVICE_3_PORT$$SERVICE_3_HEALTH_HTTP\", \"Interval\": \"15s\", \"Timeout\": \"3s\"}"
+          else
+            HEALTH_CHECK="\"Check\": {\"TCP\": \"$$LXC_IP:$$SERVICE_3_PORT\", \"Interval\": \"10s\"}"
+          fi
+          
+          curl -X PUT http://$$CONSUL_HTTP_ADDR/v1/agent/service/register -d "{
+            \"Name\": \"$$SERVICE_3_NAME\",
+            \"Port\": $$SERVICE_3_PORT,
+            \"Address\": \"$$LXC_IP\",
+            \"Tags\": [\"$$SERVICE_3_TAGS\"],
+            $$HEALTH_CHECK
+          }"
+          echo "✓ $$SERVICE_3_NAME registered"
+        fi
+        
+        echo "=== Registration Complete at $$LXC_IP ==="
+      '
+    depends_on:
+      - consul-agent
 
 volumes:
   consul-data:
@@ -39,6 +129,10 @@ configs:
       
       server = false
       client_addr = "0.0.0.0"
+      
+      # Auto-detect IP auf richtigem Interface
+      bind_addr = "{{ GetInterfaceIP \"${NETWORK_INTERFACE}\" }}"
+      advertise_addr = "{{ GetInterfaceIP \"${NETWORK_INTERFACE}\" }}"
       
       rejoin_after_leave = true
       
