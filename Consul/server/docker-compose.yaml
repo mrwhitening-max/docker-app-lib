@@ -2,26 +2,22 @@ version: '3.8'
 
 services:
   consul-server:
-    image: hashicorp/consul:latest
+    image: hashicorp/consul:${CONSUL_VERSION:-latest}
     container_name: consul-server
     hostname: consul-server
     restart: unless-stopped
-    network_mode: host  # ← KRITISCH: Nutzt LXC-Netzwerk direkt!
+    network_mode: host
     volumes:
-      - consul-data:/consul/data
-      - consul-config:/consul/config
+      - /data/consul-data:/consul/data
+      - /data/config/consul-server.hcl:/consul/config/consul-server.hcl:ro
     command: >
       agent
-      -server
-      -ui
-      -bootstrap-expect=1
-      -client=0.0.0.0
+      -config-file=/consul/config/consul-server.hcl
       -bind=${CONSUL_BIND_IP}
-      -advertise=${CONSUL_BIND_IP}
-      -datacenter=${CONSUL_DATACENTER:-homelab}
+      -advertise=${CONSUL_ADVERTISE_IP}
+      -datacenter=${CONSUL_DATACENTER}
     environment:
-      - CONSUL_LOCAL_CONFIG={"server":true,"log_level":"${CONSUL_LOG_LEVEL:-INFO}"}
+      - CONSUL_LOG_LEVEL=${CONSUL_LOG_LEVEL:-INFO}
 
 volumes:
   consul-data:
-  consul-config:
