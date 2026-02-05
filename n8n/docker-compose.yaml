@@ -1,14 +1,54 @@
+version: '3.8'
+
 services:
+  # === CONSUL INFRASTRUCTURE ===
+  consul-agent:
+    image: hashicorp/consul:${CONSUL_VERSION:-latest}
+    container_name: consul-agent
+    hostname: ${CONSUL_NODE_NAME:-consul-agent}
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - consul-data:/consul/data
+    configs:
+      - source: consul_config
+        target: /consul/config/consul.hcl
+    command: >
+      agent
+      -config-file=/consul/config/consul.hcl
+      -retry-join=${CONSUL_SERVER_IP}
+      -bind={{ GetInterfaceIP "eth0" }}
+
+  registrator:
+    image: gliderlabs/registrator:latest
+    container_name: registrator
+    restart: unless-stopped
+    network_mode: host
+    command: -internal consul://localhost:8500
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock
+    depends_on:
+      - consul-agent
+
+  # === APPLICATION SERVICES ===
   db:
     image: postgres:16
     container_name: n8n-postgres
     restart: unless-stopped
     environment:
+      # Consul Service Registration
+      - SERVICE_NAME=postgres
+      - SERVICE_TAGS=database,postgres,n8n,${CONSUL_NODE_NAME}
+      - SERVICE_CHECK_TCP=5432
+      - SERVICE_CHECK_INTERVAL=10s
+      # PostgreSQL Config
       - POSTGRES_USER=n8n
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=n8n
     volumes:
       - /data/n8n/postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -h localhost -U n8n']
       interval: 5s
@@ -22,6 +62,13 @@ services:
     ports:
       - "5678:5678"
     environment:
+      # Consul Service Registration
+      - SERVICE_NAME=n8n
+      - SERVICE_TAGS=workflow,automation,${CONSUL_NODE_NAME}
+      - SERVICE_CHECK_HTTP=/healthz
+      - SERVICE_CHECK_INTERVAL=15s
+      - SERVICE_CHECK_TIMEOUT=3s
+      # n8n Config
       - DB_TYPE=postgresdb
       - DB_POSTGRESDB_HOST=db
       - DB_POSTGRESDB_DATABASE=n8n
@@ -39,5 +86,22 @@ services:
     user: "0:0"
 
 volumes:
-  postgres_data:
-  n8n_data:
+  consul-data:
+
+configs:
+  consul_config:
+    content: |
+      datacenter = "${CONSUL_DATACENTER}"
+      data_dir = "/consul/data"
+      log_level = "${CONSUL_LOG_LEVEL}"
+      
+      server = false
+      client_addr = "0.0.0.0"
+      
+      rejoin_after_leave = true
+      
+      performance {
+        raft_multiplier = 1
+      }
+      
+      recursors = ["8.8.8.8", "1.1.1.1"]
