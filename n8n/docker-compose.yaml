@@ -21,7 +21,7 @@ services:
     restart: unless-stopped  # ← GEÄNDERT: war "no"
     network_mode: host
     environment:
-      - CONSUL_HTTP_ADDR=localhost:8500
+      - CONSUL_HTTP _ADDR=localhost:8500
       - N8N_PORT=${N8N_PORT:-5678}
       - N8N_SERVICE_NAME=${N8N_SERVICE_NAME:-n8n}
       - N8N_HEALTH_PATH=${N8N_HEALTH_PATH:-/healthz}
