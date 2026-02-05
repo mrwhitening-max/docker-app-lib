@@ -8,11 +8,11 @@ services:
     restart: unless-stopped
     network_mode: host
     volumes:
-      - /consul-data:/consul/data
+      - consul-data:/consul/data
     configs:
-      - source: /consul_server_config
+      - source: consul_server_config
         target: /consul/config/consul-server.hcl
-    command: agent -config-file=/data//consul/config/consul-server.hcl
+    command: agent -config-file=/consul/config/consul-server.hcl
 
 volumes:
   consul-data:
