@@ -32,17 +32,19 @@ services:
     command: |
       sh -c '
         echo "Detecting LXC IP address..."
-        LXC_IP=$$(ip -4 addr show $$INTERFACE | grep -oP "(?<=inet\s)\d+(\.\d+){3}" | head -1)
-        
+        LXC_IP=$$(ip -4 addr show $$INTERFACE | grep inet | awk "{print \$$2}" | cut -d/ -f1 | head -1)
+
         if [ -z "$$LXC_IP" ]; then
           echo "ERROR: Could not detect IP address on interface $$INTERFACE"
+          echo "Available interfaces:"
+          ip addr show
           exit 1
         fi
-        
+
         echo "Detected IP: $$LXC_IP"
         echo "Waiting for Consul Agent..."
         sleep 10
-        
+
         echo "Registering n8n service..."
         curl -X PUT http://$$CONSUL_HTTP_ADDR/v1/agent/service/register -d "{
           \"Name\": \"$$N8N_SERVICE_NAME\",
@@ -55,7 +57,7 @@ services:
             \"Timeout\": \"3s\"
           }
         }"
-        
+
         echo "Registering postgres service..."
         curl -X PUT http://$$CONSUL_HTTP_ADDR/v1/agent/service/register -d "{
           \"Name\": \"$$POSTGRES_SERVICE_NAME\",
@@ -67,7 +69,7 @@ services:
             \"Interval\": \"10s\"
           }
         }"
-        
+
         echo "Services registered successfully at $$LXC_IP!"
       '
     depends_on:
