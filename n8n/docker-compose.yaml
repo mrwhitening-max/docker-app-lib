@@ -127,8 +127,9 @@ configs:
       server = false
       client_addr = "0.0.0.0"
       
-      # Auto-detect IP auf allen Interfaces
-      bind_addr = "0.0.0.0"
+      # Explizit eth0 nutzen
+      bind_addr = "{{ GetInterfaceIP \"eth0\" }}"
+      advertise_addr = "{{ GetInterfaceIP \"eth0\" }}"
       
       rejoin_after_leave = true
       
