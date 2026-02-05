@@ -17,12 +17,27 @@ services:
       -retry-join=${CONSUL_SERVER_IP}
       -bind={{ GetInterfaceIP "eth0" }}
 
+  registrator:
+    image: ghcr.io/gliderlabs/registrator:latest
+    container_name: registrator
+    restart: unless-stopped
+    network_mode: host
+    command: -internal consul://localhost:8500
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock
+    depends_on:
+      - consul-agent
+
   # === APPLICATION SERVICES ===
   db:
     image: postgres:16
     container_name: n8n-postgres
     restart: unless-stopped
     environment:
+      - SERVICE_NAME=postgres
+      - SERVICE_TAGS=database,postgres,n8n,${CONSUL_NODE_NAME}
+      - SERVICE_CHECK_TCP=5432
+      - SERVICE_CHECK_INTERVAL=10s
       - POSTGRES_USER=n8n
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=n8n
@@ -43,6 +58,11 @@ services:
     ports:
       - "5678:5678"
     environment:
+      - SERVICE_NAME=n8n
+      - SERVICE_TAGS=workflow,automation,${CONSUL_NODE_NAME}
+      - SERVICE_CHECK_HTTP=/healthz
+      - SERVICE_CHECK_INTERVAL=15s
+      - SERVICE_CHECK_TIMEOUT=3s
       - DB_TYPE=postgresdb
       - DB_POSTGRESDB_HOST=db
       - DB_POSTGRESDB_DATABASE=n8n
