@@ -138,9 +138,9 @@ configs:
       server = false
       client_addr = "0.0.0.0"
       
-      # Interface aus Environment Variable
-      bind_addr = "{{ GetInterfaceIP \"${NETWORK_INTERFACE}\" }}"
-      advertise_addr = "{{ GetInterfaceIP \"${NETWORK_INTERFACE}\" }}"
+      # WICHTIG: Explizit eth0 Interface!
+      bind_addr = "{{ GetInterfaceIP \"eth0\" }}"
+      advertise_addr = "{{ GetInterfaceIP \"eth0\" }}"
       
       rejoin_after_leave = true
       
