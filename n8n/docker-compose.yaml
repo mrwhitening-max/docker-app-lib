@@ -14,9 +14,7 @@ services:
       agent
       -config-file=/consul/config/consul.hcl
       -retry-join=${CONSUL_SERVER_IP}
-      -bind={{ GetInterfaceIP "eth0" }}
 
-  # Service Registrator (automatisch mit IP-Detection)
   consul-register:
     image: curlimages/curl:latest
     container_name: consul-register
@@ -128,6 +126,9 @@ configs:
       
       server = false
       client_addr = "0.0.0.0"
+      
+      # Auto-detect IP auf allen Interfaces
+      bind_addr = "0.0.0.0"
       
       rejoin_after_leave = true
       
