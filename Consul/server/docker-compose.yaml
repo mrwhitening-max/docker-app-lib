@@ -9,15 +9,32 @@ services:
     network_mode: host
     volumes:
       - /data/consul-data:/consul/data
-      - /data/config/consul-server.hcl:/consul/config/consul-server.hcl:ro
-    command: >
-      agent
-      -config-file=/consul/config/consul-server.hcl
-      -bind=${CONSUL_BIND_IP}
-      -advertise=${CONSUL_ADVERTISE_IP}
-      -datacenter=${CONSUL_DATACENTER}
-    environment:
-      - CONSUL_LOG_LEVEL=${CONSUL_LOG_LEVEL:-INFO}
+    configs:
+      - source: consul_server_config
+        target: /data/consul/config/consul-server.hcl
+    command: agent -config-file=/data//consul/config/consul-server.hcl
 
 volumes:
   consul-data:
+
+configs:
+  consul_server_config:
+    content: |
+      datacenter = "${CONSUL_DATACENTER}"
+      data_dir = "/data/consul/data"
+      log_level = "${CONSUL_LOG_LEVEL}"
+      
+      server = true
+      bootstrap_expect = 1
+      
+      bind_addr = "${CONSUL_BIND_IP}"
+      advertise_addr = "${CONSUL_ADVERTISE_IP}"
+      client_addr = "0.0.0.0"
+      
+      ui_config {
+        enabled = true
+      }
+      
+      performance {
+        raft_multiplier = 1
+      }
