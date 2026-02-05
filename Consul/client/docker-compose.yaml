@@ -1,17 +1,60 @@
-version: '3.7'
+version: '3.8'
 
 services:
-
-  consul-client:
-    image: hashicorp/consul:1.10.0
-    container_name: consul-client
-    restart: always
+  # Consul Agent (Client Mode)
+  consul-agent:
+    image: hashicorp/consul:${CONSUL_VERSION:-latest}
+    container_name: consul-agent
+    hostname: ${CONSUL_NODE_NAME:-consul-agent}
+    restart: unless-stopped
+    network_mode: host
     volumes:
-     - /data/client.json:/consul/config/client.json:ro
-    networks:
-      - consul
-    command: "agent"
+      - consul-data:/consul/data
+    configs:
+      - source: consul_agent_config
+        target: /consul/config/consul-agent.hcl
+    command: >
+      agent
+      -config-file=/consul/config/consul-agent.hcl
+      -retry-join=${CONSUL_SERVER_IP}
+      -bind={{ GetInterfaceIP "eth0" }}
+      -datacenter=${CONSUL_DATACENTER}
+    depends_on:
+      - registrator
 
-networks:
-  consul:
-    driver: bridge
+  # Registrator - Automatische Service-Registrierung
+  registrator:
+    image: gliderlabs/registrator:latest
+    container_name: registrator
+    restart: unless-stopped
+    network_mode: host
+    command: -internal consul://localhost:8500
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock
+
+volumes:
+  consul-data:
+
+configs:
+  consul_agent_config:
+    content: |
+      datacenter = "${CONSUL_DATACENTER}"
+      data_dir = "/consul/data"
+      log_level = "${CONSUL_LOG_LEVEL}"
+      
+      # Client Mode (kein Server!)
+      server = false
+      
+      # Von überall erreichbar
+      client_addr = "0.0.0.0"
+      
+      # Rejoin after restart
+      rejoin_after_leave = true
+      
+      # Performance
+      performance {
+        raft_multiplier = 1
+      }
+      
+      # DNS Config
+      recursors = ["8.8.8.8", "1.1.1.1"]
