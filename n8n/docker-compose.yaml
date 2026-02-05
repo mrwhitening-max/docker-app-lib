@@ -18,7 +18,7 @@ services:
   consul-register:
     image: curlimages/curl:latest
     container_name: consul-register
-    restart: "no"
+    restart: unless-stopped  # ← GEÄNDERT: war "no"
     network_mode: host
     environment:
       - CONSUL_HTTP_ADDR=localhost:8500
@@ -29,48 +29,57 @@ services:
       - POSTGRES_SERVICE_NAME=${POSTGRES_SERVICE_NAME:-postgres}
       - SERVICE_TAGS=${SERVICE_TAGS:-}
       - INTERFACE=${NETWORK_INTERFACE:-eth0}
+      - RE_REGISTER_INTERVAL=${RE_REGISTER_INTERVAL:-300}  # ← NEU: alle 5 Min
     command: |
       sh -c '
-        echo "Detecting LXC IP address..."
-        LXC_IP=$$(ip -4 addr show $$INTERFACE | grep inet | awk "{print \$$2}" | cut -d/ -f1 | head -1)
+        echo "=== Consul Service Registration Daemon ==="
 
-        if [ -z "$$LXC_IP" ]; then
-          echo "ERROR: Could not detect IP address on interface $$INTERFACE"
-          echo "Available interfaces:"
-          ip addr show
-          exit 1
-        fi
+        while true; do
+          echo "Detecting LXC IP address..."
+          LXC_IP=$$(ip -4 addr show $$INTERFACE | grep inet | awk "{print \$$2}" | cut -d/ -f1 | head -1)
 
-        echo "Detected IP: $$LXC_IP"
-        echo "Waiting for Consul Agent..."
-        sleep 10
+          if [ -z "$$LXC_IP" ]; then
+            echo "ERROR: Could not detect IP address on interface $$INTERFACE"
+            echo "Available interfaces:"
+            ip addr show
+            echo "Retrying in 30 seconds..."
+            sleep 30
+            continue
+          fi
 
-        echo "Registering n8n service..."
-        curl -X PUT http://$$CONSUL_HTTP_ADDR/v1/agent/service/register -d "{
-          \"Name\": \"$$N8N_SERVICE_NAME\",
-          \"Port\": $$N8N_PORT,
-          \"Address\": \"$$LXC_IP\",
-          \"Tags\": [\"workflow\", \"automation\", \"$$SERVICE_TAGS\"],
-          \"Check\": {
-            \"HTTP\": \"http://$$LXC_IP:$$N8N_PORT$$N8N_HEALTH_PATH\",
-            \"Interval\": \"15s\",
-            \"Timeout\": \"3s\"
-          }
-        }"
+          echo "Detected IP: $$LXC_IP"
+          echo "Waiting for Consul Agent..."
+          sleep 10
 
-        echo "Registering postgres service..."
-        curl -X PUT http://$$CONSUL_HTTP_ADDR/v1/agent/service/register -d "{
-          \"Name\": \"$$POSTGRES_SERVICE_NAME\",
-          \"Port\": $$POSTGRES_PORT,
-          \"Address\": \"$$LXC_IP\",
-          \"Tags\": [\"database\", \"postgres\", \"$$SERVICE_TAGS\"],
-          \"Check\": {
-            \"TCP\": \"$$LXC_IP:$$POSTGRES_PORT\",
-            \"Interval\": \"10s\"
-          }
-        }"
+          echo "Registering n8n service..."
+          curl -X PUT http://$$CONSUL_HTTP_ADDR/v1/agent/service/register -d "{
+            \"Name\": \"$$N8N_SERVICE_NAME\",
+            \"Port\": $$N8N_PORT,
+            \"Address\": \"$$LXC_IP\",
+            \"Tags\": [\"workflow\", \"automation\", \"$$SERVICE_TAGS\"],
+            \"Check\": {
+              \"HTTP\": \"http://$$LXC_IP:$$N8N_PORT$$N8N_HEALTH_PATH\",
+              \"Interval\": \"15s\",
+              \"Timeout\": \"3s\"
+            }
+          }"
 
-        echo "Services registered successfully at $$LXC_IP!"
+          echo "Registering postgres service..."
+          curl -X PUT http://$$CONSUL_HTTP_ADDR/v1/agent/service/register -d "{
+            \"Name\": \"$$POSTGRES_SERVICE_NAME\",
+            \"Port\": $$POSTGRES_PORT,
+            \"Address\": \"$$LXC_IP\",
+            \"Tags\": [\"database\", \"postgres\", \"$$SERVICE_TAGS\"],
+            \"Check\": {
+              \"TCP\": \"$$LXC_IP:$$POSTGRES_PORT\",
+              \"Interval\": \"10s\"
+            }
+          }"
+
+          echo "Services registered successfully at $$LXC_IP!"
+          echo "Next re-registration in $$RE_REGISTER_INTERVAL seconds..."
+          sleep $$RE_REGISTER_INTERVAL
+        done
       '
     depends_on:
       - consul-agent
@@ -129,9 +138,9 @@ configs:
       server = false
       client_addr = "0.0.0.0"
       
-      # Explizit eth0 nutzen
-      bind_addr = "{{ GetInterfaceIP \"eth0\" }}"
-      advertise_addr = "{{ GetInterfaceIP \"eth0\" }}"
+      # Interface aus Environment Variable
+      bind_addr = "{{ GetInterfaceIP \"${NETWORK_INTERFACE}\" }}"
+      advertise_addr = "{{ GetInterfaceIP \"${NETWORK_INTERFACE}\" }}"
       
       rejoin_after_leave = true
       
