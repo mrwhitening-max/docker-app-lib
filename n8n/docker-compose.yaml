@@ -97,6 +97,30 @@ services:
       - consul-agent
 
   # ============================================
+  # ENVOY INSTALLER
+  # Einmaliger Init-Container: lädt Envoy Binary
+  # in ein geteiltes Volume. Läuft nur einmal,
+  # danach ist das Binary gecacht im Volume.
+  # ============================================
+  envoy-installer:
+    image: alpine:latest
+    container_name: envoy-installer
+    restart: "no"
+    volumes:
+      - envoy-bin:/envoy-bin
+    command: |
+      sh -c '
+        if [ -f /envoy-bin/envoy ]; then
+          echo "Envoy already installed, skipping."
+          exit 0
+        fi
+        echo "Downloading Envoy binary..."
+        wget -O /envoy-bin/envoy "https://github.com/envoyproxy/envoy/releases/download/v1.29.7/envoy-1.29.7-linux-x86_64"
+        chmod +x /envoy-bin/envoy
+        echo "Done: $(/envoy-bin/envoy --version)"
+      '
+
+  # ============================================
   # ENVOY SIDECAR
   # Läuft neben n8n und übernimmt den ausgehenden
   # Verkehr zu reactive-resume via mTLS.
@@ -108,13 +132,14 @@ services:
     restart: unless-stopped
     network_mode: host
     volumes:
-      - /usr/bin/envoy:/usr/bin/envoy  # Envoy muss auf dem LXC installiert sein!
+      - envoy-bin:/usr/local/bin  # Envoy Binary aus dem Installer-Volume
     environment:
       - CONSUL_HTTP_ADDR=localhost:8500
     command: connect envoy -sidecar-for ${N8N_SERVICE_NAME:-n8n}
     depends_on:
       - consul-agent
       - consul-register
+      - envoy-installer
 
   db:
     image: postgres:16
@@ -159,6 +184,7 @@ services:
 
 volumes:
   consul-data:
+  envoy-bin:  # Geteiltes Volume für das Envoy Binary
 
 configs:
   consul_config:
