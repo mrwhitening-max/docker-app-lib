@@ -30,6 +30,7 @@ services:
       - SERVICE_TAGS=${SERVICE_TAGS:-automation}
       - INTERFACE=${NETWORK_INTERFACE:-eth0}
       - RE_REGISTER_INTERVAL=${RE_REGISTER_INTERVAL:-300}  # ← NEU: alle 5 Min
+      - CONSUL_HTTP_ADDR=localhost:8500
     command: |
       sh -c '
         echo "=== Consul Service Registration Daemon ==="
