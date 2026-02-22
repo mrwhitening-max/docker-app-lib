@@ -180,6 +180,10 @@ configs:
         enabled = true
       }
 
+      ports {
+        grpc = 8502
+      }
+
       performance {
         raft_multiplier = 1
       }
