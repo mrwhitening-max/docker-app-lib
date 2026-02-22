@@ -5,13 +5,13 @@ services:
     image: postgres:latest
     restart: unless-stopped
     environment:
-      - POSTGRES_DB=postgres
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=${POSTGRES_DB:-postgres}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
     volumes:
       - postgres_data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "postgres"]
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-postgres}", "-d", "${POSTGRES_DB:-postgres}"]
       start_period: 10s
       interval: 30s
       timeout: 10s
@@ -24,31 +24,24 @@ services:
       - QUEUED=10
       - HEALTH=true
       - CONCURRENT=5
-      - TOKEN=1234567890
+      - TOKEN=${BROWSERLESS_TOKEN:-changeme}
     healthcheck:
-      test:
-        ["CMD", "curl", "-f", "http://localhost:3000/pressure?token=1234567890"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/pressure?token=${BROWSERLESS_TOKEN:-changeme}"]
       interval: 10s
       timeout: 5s
       retries: 10
-
-  # As an alternative to browserless, you can also use a lightweight image like chromedp/headless-shell:latest
-  # See https://docs.rxresu.me/self-hosting/docker#alternative-printer-options for more information.
-  # chrome:
-  #   image: chromedp/headless-shell:latest
-  #   restart: unless-stopped
-  #   ports:
-  #     - "9222:9222"
 
   seaweedfs:
     image: chrislusf/seaweedfs:latest
     restart: unless-stopped
     command: server -s3 -filer -dir=/data -ip=0.0.0.0
     environment:
-      - AWS_ACCESS_KEY_ID=seaweedfs
-      - AWS_SECRET_ACCESS_KEY=seaweedfs
+      - AWS_ACCESS_KEY_ID=${S3_ACCESS_KEY:-seaweedfs}
+      - AWS_SECRET_ACCESS_KEY=${S3_SECRET_KEY:-seaweedfs}
     volumes:
       - seaweedfs_data:/data
+    ports:
+      - "9000:8333"
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8888"]
       start_period: 10s
@@ -62,8 +55,8 @@ services:
     entrypoint: >
       /bin/sh -c "
         sleep 5;
-        mc alias set seaweedfs http://seaweedfs:8333 seaweedfs seaweedfs;
-        mc mb seaweedfs/reactive-resume;
+        mc alias set seaweedfs http://seaweedfs:8333 ${S3_ACCESS_KEY:-seaweedfs} ${S3_SECRET_KEY:-seaweedfs};
+        mc mb seaweedfs/${S3_BUCKET:-reactive-resume};
         exit 0;
       "
     depends_on:
@@ -72,29 +65,27 @@ services:
 
   reactive_resume:
     image: amruthpillai/reactive-resume:latest
-    # image: ghcr.io/amruthpillai/reactive-resume:latest
     environment:
       # Server
       - TZ=Etc/UTC
       - NODE_ENV=production
-      - APP_URL=${APP_URL}
-      - PRINTER_APP_URL=${PRINTER_APP_URL}
+      - APP_URL=${APP_URL:-http://localhost:3000}
+      - PRINTER_APP_URL=${PRINTER_APP_URL:-http://reactive_resume:3000}
       # Printer
-      - PRINTER_ENDPOINT=ws://browserless:3000?token=1234567890
-      # - PRINTER_ENDPOINT=http://chrome:9222 # Or, if you're using chromedp/headless-shell
+      - PRINTER_ENDPOINT=ws://browserless:3000?token=${BROWSERLESS_TOKEN:-changeme}
       # Database
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/postgres
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-postgres}
       # Authentication
-      - AUTH_SECRET=${AUTH_SECRET}
+      - AUTH_SECRET=${AUTH_SECRET:-changeme-to-a-secure-secret-key}
       # Storage
-      - S3_ACCESS_KEY_ID=seaweedfs
-      - S3_SECRET_ACCESS_KEY=seaweedfs
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY:-seaweedfs}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_KEY:-seaweedfs}
       - S3_ENDPOINT=http://seaweedfs:8333
-      - S3_URL=${PRINTER_APP_URL}
-      - S3_BUCKET=reactive-resume
+      - S3_URL=${S3_URL:-http://localhost:9000}
+      - S3_BUCKET=${S3_BUCKET:-reactive-resume}
       - S3_FORCE_PATH_STYLE=true
     volumes:
-      - reactive_resume_data:/app/data
+      - /data/reactive_resume_data:/app/data
     ports:
       - "3000:3000"
     depends_on:
