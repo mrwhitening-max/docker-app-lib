@@ -31,18 +31,6 @@ configs:
       advertise_addr = "${CONSUL_ADVERTISE_IP}"
       client_addr = "0.0.0.0"
       
-      # Connect/Mesh aktivieren
-      connect {
-        enabled = true
-      }
-
-      # ZERO TRUST: Alles blockieren per Default
-      acl {
-        enabled = true
-        default_policy = "deny"
-        enable_token_persistence = true
-      }
-      
       ui_config {
         enabled = true
       }
