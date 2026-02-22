@@ -104,15 +104,14 @@ services:
   # Erreichbar für n8n unter localhost:19001
   # ============================================
   envoy-sidecar:
-    # Wir nutzen das Image, das Consul und Envoy bereits perfekt kombiniert
-    image: hashicorp/consul-envoy:${CONSUL_VERSION:-1.22.4}
+    # Hier MUSS eine feste Version stehen (z.B. 1.20.1)
+    image: hashicorp/consul-envoy:1.20.1
     container_name: envoy-sidecar
     restart: unless-stopped
     network_mode: host
     environment:
       - CONSUL_HTTP_ADDR=127.0.0.1:8500
       - CONSUL_GRPC_ADDR=127.0.0.1:8502
-    # Der Entrypoint dieses Images ist bereits auf "consul connect envoy" eingestellt
     command: >
       -sidecar-for ${N8N_SERVICE_NAME:-n8n}
       -ignore-envoy-compatibility
