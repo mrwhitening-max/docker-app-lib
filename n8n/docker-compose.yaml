@@ -63,7 +63,7 @@ services:
                   \"Upstreams\": [
                     {
                       \"DestinationName\": \"reactive-resume\",
-                      \"LocalBindPort\": 19000
+                      \"LocalBindPort\": 19001
                     }
                   ]
                 }
@@ -101,7 +101,7 @@ services:
   # Debian-basiert (glibc) damit Envoy läuft.
   # Lädt beim ersten Start Consul + Envoy herunter,
   # danach gecacht im Volume.
-  # Erreichbar für n8n unter localhost:19000
+  # Erreichbar für n8n unter localhost:19001
   # ============================================
   envoy-sidecar:
     image: debian:bookworm-slim
