@@ -122,7 +122,7 @@ services:
           echo "Installing dependencies..."
           apt-get update -qq && apt-get install -y -qq wget ca-certificates unzip
 
-          CONSUL_URL="https://releases.hashicorp.com/consul/1.22.3/consul_1.22.3_linux_amd64.zip"
+          CONSUL_URL="https://releases.hashicorp.com/consul/1.22.4/consul_1.22.4_linux_amd64.zip"
           echo "Downloading Consul from: $$CONSUL_URL"
           wget --progress=bar:force -O /tmp/consul.zip "$$CONSUL_URL"
           if [ $$? -ne 0 ]; then
@@ -149,7 +149,7 @@ services:
         if [ ! -f /envoy-bin/envoy ]; then
           echo "Downloading Envoy binary..."
           apt-get update -qq && apt-get install -y -qq wget ca-certificates
-          wget -q -O /envoy-bin/envoy "https://github.com/envoyproxy/envoy/releases/download/v1.31.5/envoy-1.31.5-linux-x86_64"
+          wget -q -O /envoy-bin/envoy "https://github.com/envoyproxy/envoy/releases/download/v1.32.3/envoy-1.32.3-linux-x86_64"
           chmod +x /envoy-bin/envoy
           echo "Envoy installed: $$(/envoy-bin/envoy --version)"
         fi
