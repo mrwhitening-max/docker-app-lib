@@ -95,7 +95,7 @@ services:
   # ============================================
 
   postgres:
-    image: postgres:latest
+    image: postgres:16
     restart: unless-stopped
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-postgres}
@@ -171,7 +171,7 @@ services:
   # ============================================
 
   reactive_resume:
-    image: amruthpillai/reactive-resume:latest
+    image: amruthpillai/reactive-resume:v5.0.9
     environment:
       # Server
       - TZ=Etc/UTC
