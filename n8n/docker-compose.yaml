@@ -149,7 +149,7 @@ services:
         if [ ! -f /envoy-bin/envoy ]; then
           echo "Downloading Envoy binary..."
           apt-get update -qq && apt-get install -y -qq wget ca-certificates
-          wget -q -O /envoy-bin/envoy "https://github.com/envoyproxy/envoy/releases/download/v1.29.7/envoy-1.29.7-linux-x86_64"
+          wget -q -O /envoy-bin/envoy "https://github.com/envoyproxy/envoy/releases/download/v1.31.5/envoy-1.31.5-linux-x86_64"
           chmod +x /envoy-bin/envoy
           echo "Envoy installed: $$(/envoy-bin/envoy --version)"
         fi
@@ -157,7 +157,7 @@ services:
         export PATH="/envoy-bin:$$PATH"
 
         echo "Starting Envoy sidecar for $$N8N_SERVICE_NAME..."
-        exec consul connect envoy -sidecar-for $$N8N_SERVICE_NAME
+        exec consul connect envoy -sidecar-for $$N8N_SERVICE_NAME -ignore-envoy-compatibility
       '
     depends_on:
       - consul-agent
