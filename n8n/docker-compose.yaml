@@ -104,61 +104,22 @@ services:
   # Erreichbar für n8n unter localhost:19001
   # ============================================
   envoy-sidecar:
-    image: debian:bookworm-slim
+    # Wir nutzen das Image, das Consul und Envoy bereits perfekt kombiniert
+    image: hashicorp/consul-envoy:${CONSUL_VERSION:-1.20.1}
     container_name: envoy-sidecar
     restart: unless-stopped
     network_mode: host
-    volumes:
-      - envoy-bin:/envoy-bin
     environment:
-      - CONSUL_HTTP_ADDR=localhost:8500
-      - N8N_SERVICE_NAME=${N8N_SERVICE_NAME:-n8n}
-      - CONSUL_VERSION=${CONSUL_VERSION:-1.20.1}
-      - PATH=/envoy-bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-    command: |
-      sh -c '
-        set -e
-      
-        # Sicherstellen, dass wir eine valide Consul-Version nutzen
-        REAL_CONSUL_VER="${CONSUL_VERSION:-1.20.1}"
-        [ "$$REAL_CONSUL_VER" = "latest" ] && REAL_CONSUL_VER="1.20.1"
-      
-        install_consul() {
-          if [ ! -f /envoy-bin/consul ]; then
-            echo "Installing Consul $$REAL_CONSUL_VER..."
-            apt-get update -qq && apt-get install -y -qq wget ca-certificates unzip
-            URL="https://releases.hashicorp.com/consul/$$REAL_CONSUL_VER/consul_$${REAL_CONSUL_VER}_linux_amd64.zip"
-            wget -q -O /tmp/consul.zip "$$URL"
-            unzip -o /tmp/consul.zip -d /envoy-bin/
-            chmod +x /envoy-bin/consul
-            rm -f /tmp/consul.zip
-          fi
-        }
-      
-        install_envoy() {
-          if [ ! -f /envoy-bin/envoy ]; then
-            # UPDATE: Sprung auf 1.32.3 um Consul 1.22+ zufrieden zu stellen
-            echo "Installing Envoy v1.32.3..."
-            apt-get update -qq && apt-get install -y -qq wget ca-certificates
-            wget -q -O /envoy-bin/envoy "https://github.com/envoyproxy/envoy/releases/download/v1.32.3/envoy-1.32.3-linux-x86_64"
-            chmod +x /envoy-bin/envoy
-            echo "Envoy v1.32.3 installed."
-          fi
-        }
-      
-        install_consul
-        install_envoy
-      
-        export PATH="/envoy-bin:$$PATH"
-      
-        echo "Waiting for Consul Agent at localhost:8500..."
-        until wget -qO- http://localhost:8500/v1/status/leader | grep -q ":8300"; do
-          sleep 2
-        done
-      
-        echo "Starting Envoy sidecar for $$N8N_SERVICE_NAME..."
-        exec consul connect envoy -sidecar-for $$N8N_SERVICE_NAME -ignore-envoy-compatibility
-      '
+      - CONSUL_HTTP_ADDR=127.0.0.1:8500
+      - CONSUL_GRPC_ADDR=127.0.0.1:8502
+    # Der Entrypoint dieses Images ist bereits auf "consul connect envoy" eingestellt
+    command: >
+      -sidecar-for ${N8N_SERVICE_NAME:-n8n}
+      -ignore-envoy-compatibility
+    depends_on:
+      - consul-agent
+      - consul-register
+
   db:
     image: postgres:16
     container_name: n8n-postgres
