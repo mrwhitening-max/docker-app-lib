@@ -283,20 +283,22 @@ volumes:
 configs:
   consul_config:
     content: |
-      datacenter = "${CONSUL_DATACENTER}"
+      datacenter = "${CONSUL_DATACENTER:-dc1}"
       data_dir = "/consul/data"
-      log_level = "${CONSUL_LOG_LEVEL:-INFO}"
-
       server = false
       client_addr = "0.0.0.0"
 
       bind_addr = "{{ GetInterfaceIP \"eth0\" }}"
       advertise_addr = "{{ GetInterfaceIP \"eth0\" }}"
 
-      rejoin_after_leave = true
-
-      performance {
-        raft_multiplier = 1
+      # WICHTIG: Connect muss an sein
+      connect {
+        enabled = true
       }
 
-      recursors = ["8.8.8.8", "1.1.1.1"]
+      # WICHTIG: Der gRPC Port wird von Envoy zwingend benötigt!
+      ports {
+        grpc = 8502
+      }
+
+      rejoin_after_leave = true
