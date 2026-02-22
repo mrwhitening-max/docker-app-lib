@@ -113,38 +113,38 @@ services:
     environment:
       - CONSUL_HTTP_ADDR=localhost:8500
       - N8N_SERVICE_NAME=${N8N_SERVICE_NAME:-n8n}
-      # Falls die Variable leer ist, nutzen wir eine feste Version als Fallback
-      - CONSUL_VERSION=${CONSUL_VERSION:-1.17.1}
+      - CONSUL_VERSION=${CONSUL_VERSION:-1.20.1}
       - PATH=/envoy-bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     command: |
       sh -c '
         set -e
       
-        # Sicherstellen, dass wir eine echte Versionsnummer haben
-        [ "$$CONSUL_VERSION" = "latest" ] && VERSION="1.17.1" || VERSION="$$CONSUL_VERSION"
+        # Sicherstellen, dass wir nicht versuchen, "latest" als Pfad herunterzuladen
+        if [ "$$CONSUL_VERSION" = "latest" ]; then
+          REAL_CONSUL_VER="1.20.1"
+        else
+          REAL_CONSUL_VER="$$CONSUL_VERSION"
+        fi
       
         install_consul() {
           if [ ! -f /envoy-bin/consul ]; then
-            echo "Installing Consul $$VERSION..."
+            echo "Installing Consul $$REAL_CONSUL_VER..."
             apt-get update -qq && apt-get install -y -qq wget ca-certificates unzip
-            URL="https://releases.hashicorp.com/consul/$$VERSION/consul_$${VERSION}_linux_amd64.zip"
-            echo "Downloading from $$URL"
-            wget -q -O /tmp/consul.zip "$$URL" || { echo "ERROR: Download failed"; exit 1; }
+            URL="https://releases.hashicorp.com/consul/$$REAL_CONSUL_VER/consul_$${REAL_CONSUL_VER}_linux_amd64.zip"
+            wget -q -O /tmp/consul.zip "$$URL" || { echo "ERROR: Consul Download failed"; exit 1; }
             unzip -o /tmp/consul.zip -d /envoy-bin/
             chmod +x /envoy-bin/consul
             rm /tmp/consul.zip
-            echo "Consul installed successfully."
           fi
         }
       
         install_envoy() {
           if [ ! -f /envoy-bin/envoy ]; then
-            echo "Installing Envoy v1.27.1 (stable for Consul)..."
+            echo "Installing Envoy v1.31.5 (required for newer Consul)..."
             apt-get update -qq && apt-get install -y -qq wget ca-certificates
-            # Wir nutzen eine etwas konservativere Envoy-Version für bessere Kompatibilität
-            wget -q -O /envoy-bin/envoy "https://github.com/envoyproxy/envoy/releases/download/v1.27.1/envoy-1.27.1-linux-x86_64" || { echo "ERROR: Envoy download failed"; exit 1; }
+            # Version 1.31.5 ist kompatibel mit Consul 1.20+
+            wget -q -O /envoy-bin/envoy "https://github.com/envoyproxy/envoy/releases/download/v1.31.5/envoy-1.31.5-linux-x86_64" || { echo "ERROR: Envoy download failed"; exit 1; }
             chmod +x /envoy-bin/envoy
-            echo "Envoy installed successfully."
           fi
         }
       
@@ -159,12 +159,9 @@ services:
         done
       
         echo "Starting Envoy sidecar for $$N8N_SERVICE_NAME..."
+        # Wir lassen -ignore-envoy-compatibility sicherheitshalber drin
         exec consul connect envoy -sidecar-for $$N8N_SERVICE_NAME -ignore-envoy-compatibility
       '
-
-    depends_on:
-      - consul-agent
-      - consul-register
 
   db:
     image: postgres:16
