@@ -18,7 +18,7 @@ services:
   consul-register:
     image: curlimages/curl:latest
     container_name: consul-register
-    restart: unless-stopped  # ← GEÄNDERT: war "no"
+    restart: unless-stopped
     network_mode: host
     environment:
       - CONSUL_HTTP_ADDR=localhost:8500
@@ -29,8 +29,7 @@ services:
       - POSTGRES_SERVICE_NAME=${POSTGRES_SERVICE_NAME:-n8n-postgres}
       - SERVICE_TAGS=${SERVICE_TAGS:-automation}
       - INTERFACE=${NETWORK_INTERFACE:-eth0}
-      - RE_REGISTER_INTERVAL=${RE_REGISTER_INTERVAL:-300}  # ← NEU: alle 5 Min
-      - CONSUL_HTTP_ADDR=localhost:8500
+      - RE_REGISTER_INTERVAL=${RE_REGISTER_INTERVAL:-300}
     command: |
       sh -c '
         echo "=== Consul Service Registration Daemon ==="
@@ -52,12 +51,24 @@ services:
           echo "Waiting for Consul Agent..."
           sleep 10
 
-          echo "Registering n8n service..."
+          echo "Registering n8n service (mit Connect/Sidecar)..."
           curl -X PUT http://$$CONSUL_HTTP_ADDR/v1/agent/service/register -d "{
             \"Name\": \"$$N8N_SERVICE_NAME\",
             \"Port\": $$N8N_PORT,
             \"Address\": \"$$LXC_IP\",
             \"Tags\": [\"workflow\", \"automation\", \"$$SERVICE_TAGS\"],
+            \"Connect\": {
+              \"SidecarService\": {
+                \"Proxy\": {
+                  \"Upstreams\": [
+                    {
+                      \"DestinationName\": \"reactive-resume\",
+                      \"LocalBindPort\": 19000
+                    }
+                  ]
+                }
+              }
+            },
             \"Check\": {
               \"HTTP\": \"http://$$LXC_IP:$$N8N_PORT$$N8N_HEALTH_PATH\",
               \"Interval\": \"15s\",
@@ -84,6 +95,26 @@ services:
       '
     depends_on:
       - consul-agent
+
+  # ============================================
+  # ENVOY SIDECAR
+  # Läuft neben n8n und übernimmt den ausgehenden
+  # Verkehr zu reactive-resume via mTLS.
+  # Erreichbar für n8n unter localhost:19000
+  # ============================================
+  envoy-sidecar:
+    image: hashicorp/consul:${CONSUL_VERSION:-latest}
+    container_name: envoy-sidecar
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /usr/bin/envoy:/usr/bin/envoy  # Envoy muss auf dem LXC installiert sein!
+    environment:
+      - CONSUL_HTTP_ADDR=localhost:8500
+    command: connect envoy -sidecar-for ${N8N_SERVICE_NAME:-n8n}
+    depends_on:
+      - consul-agent
+      - consul-register
 
   db:
     image: postgres:16
@@ -135,18 +166,22 @@ configs:
       datacenter = "${CONSUL_DATACENTER}"
       data_dir = "/consul/data"
       log_level = "${CONSUL_LOG_LEVEL}"
-      
+
       server = false
       client_addr = "0.0.0.0"
-      
-      # WICHTIG: Explizit eth0 Interface!
+
       bind_addr = "{{ GetInterfaceIP \"eth0\" }}"
       advertise_addr = "{{ GetInterfaceIP \"eth0\" }}"
-      
+
       rejoin_after_leave = true
-      
+
+      # Connect/Service Mesh aktivieren
+      connect {
+        enabled = true
+      }
+
       performance {
         raft_multiplier = 1
       }
-      
+
       recursors = ["8.8.8.8", "1.1.1.1"]
