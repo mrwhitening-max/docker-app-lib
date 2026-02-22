@@ -103,7 +103,7 @@ services:
   # danach ist das Binary gecacht im Volume.
   # ============================================
   envoy-installer:
-    image: alpine:latest
+    image: debian:bookworm-slim
     container_name: envoy-installer
     restart: "no"
     volumes:
@@ -115,7 +115,8 @@ services:
           exit 0
         fi
         echo "Downloading Envoy binary..."
-        wget -O /envoy-bin/envoy "https://github.com/envoyproxy/envoy/releases/download/v1.29.7/envoy-1.29.7-linux-x86_64"
+        apt-get update -qq && apt-get install -y -qq wget ca-certificates
+        wget -q -O /envoy-bin/envoy "https://github.com/envoyproxy/envoy/releases/download/v1.29.7/envoy-1.29.7-linux-x86_64"
         chmod +x /envoy-bin/envoy
         echo "Done: $(/envoy-bin/envoy --version)"
       '
