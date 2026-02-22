@@ -117,46 +117,39 @@ services:
       - PATH=/envoy-bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     command: |
       sh -c '
-        # Consul Binary installieren falls nicht vorhanden
-        if [ ! -f /envoy-bin/consul ]; then
-          echo "Installing dependencies..."
+        set -e # Beende bei Fehlern
+        
+        # Funktion zum Download von Consul
+        install_consul() {
+          echo "Installing Consul ${CONSUL_VERSION}..."
           apt-get update -qq && apt-get install -y -qq wget ca-certificates unzip
-
-          CONSUL_URL="https://releases.hashicorp.com/consul/1.22.4/consul_1.22.4_linux_amd64.zip"
-          echo "Downloading Consul from: $$CONSUL_URL"
-          wget --progress=bar:force -O /tmp/consul.zip "$$CONSUL_URL"
-          if [ $$? -ne 0 ]; then
-            echo "ERROR: Consul download failed!"
-            sleep 10
-            exit 1
-          fi
-
-          echo "Extracting Consul..."
-          unzip /tmp/consul.zip -d /envoy-bin/
-          if [ $$? -ne 0 ]; then
-            echo "ERROR: Consul unzip failed! File is corrupt or not a zip."
-            rm -f /tmp/consul.zip
-            sleep 10
-            exit 1
-          fi
-
+          URL="https://releases.hashicorp.com/consul/${CONSUL_VERSION}/consul_${CONSUL_VERSION}_linux_amd64.zip"
+          wget -q -O /tmp/consul.zip "$$URL"
+          unzip -o /tmp/consul.zip -d /envoy-bin/
           chmod +x /envoy-bin/consul
-          rm -f /tmp/consul.zip
-          echo "Consul installed: $$(/envoy-bin/consul version | head -1)"
-        fi
+          rm /tmp/consul.zip
+        }
 
-        # Envoy Binary installieren falls nicht vorhanden
-        if [ ! -f /envoy-bin/envoy ]; then
-          echo "Downloading Envoy binary..."
+        # Funktion zum Download von Envoy
+        install_envoy() {
+          echo "Installing Envoy v1.33.1..."
           apt-get update -qq && apt-get install -y -qq wget ca-certificates
           wget -q -O /envoy-bin/envoy "https://github.com/envoyproxy/envoy/releases/download/v1.33.1/envoy-1.33.1-linux-x86_64"
           chmod +x /envoy-bin/envoy
-          echo "Envoy installed: $$(/envoy-bin/envoy --version)"
-        fi
+        }
+
+        [ ! -f /envoy-bin/consul ] && install_consul
+        [ ! -f /envoy-bin/envoy ] && install_envoy
 
         export PATH="/envoy-bin:$$PATH"
-
+        
         echo "Starting Envoy sidecar for $$N8N_SERVICE_NAME..."
+        # Wir warten kurz, bis der Consul-Agent wirklich antwortet
+        until curl -s http://localhost:8500/v1/status/leader | grep -q ":8300"; do
+          echo "Waiting for Consul Agent to be ready..."
+          sleep 2
+        done
+
         exec consul connect envoy -sidecar-for $$N8N_SERVICE_NAME -ignore-envoy-compatibility
       '
     depends_on:
