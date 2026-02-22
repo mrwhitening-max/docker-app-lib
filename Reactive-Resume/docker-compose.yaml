@@ -64,8 +64,6 @@ services:
           echo "Detected IP: $$LXC_IP"
           echo "Waiting for Consul Agent..."
           sleep 10
-      
-          
 
           echo "Registering reactive-resume service..."
           curl -X PUT http://$$CONSUL_HTTP_ADDR/v1/agent/service/register -d "{
