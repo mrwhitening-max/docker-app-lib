@@ -119,11 +119,29 @@ services:
       sh -c '
         # Consul Binary installieren falls nicht vorhanden
         if [ ! -f /envoy-bin/consul ]; then
-          echo "Downloading Consul binary..."
+          echo "Installing dependencies..."
           apt-get update -qq && apt-get install -y -qq wget ca-certificates unzip
-          wget -q -O /tmp/consul.zip "https://releases.hashicorp.com/consul/$${CONSUL_VERSION}/consul_$${CONSUL_VERSION}_linux_amd64.zip"
-          unzip -q /tmp/consul.zip -d /envoy-bin/
+
+          CONSUL_URL="https://releases.hashicorp.com/consul/$${CONSUL_VERSION}/consul_$${CONSUL_VERSION}_linux_amd64.zip"
+          echo "Downloading Consul from: $$CONSUL_URL"
+          wget --progress=bar:force -O /tmp/consul.zip "$$CONSUL_URL"
+          if [ $$? -ne 0 ]; then
+            echo "ERROR: Consul download failed!"
+            sleep 10
+            exit 1
+          fi
+
+          echo "Extracting Consul..."
+          unzip /tmp/consul.zip -d /envoy-bin/
+          if [ $$? -ne 0 ]; then
+            echo "ERROR: Consul unzip failed! File is corrupt or not a zip."
+            rm -f /tmp/consul.zip
+            sleep 10
+            exit 1
+          fi
+
           chmod +x /envoy-bin/consul
+          rm -f /tmp/consul.zip
           echo "Consul installed: $$(/envoy-bin/consul version | head -1)"
         fi
 
