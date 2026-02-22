@@ -98,39 +98,6 @@ services:
     depends_on:
       - consul-agent
 
-  envoy-sidecar:
-    image: debian:bookworm-slim
-    container_name: envoy-sidecar
-    restart: unless-stopped
-    network_mode: host
-    volumes:
-      - envoy-bin:/envoy-bin
-    environment:
-      - CONSUL_HTTP_ADDR=localhost:8500
-      - APP_SERVICE_NAME=${APP_SERVICE_NAME:-reactive-resume}
-    command: |
-      sh -c '
-        set -e
-        # Binaries laden falls Volume leer
-        if [ ! -f /envoy-bin/envoy ]; then
-          apt-get update -qq && apt-get install -y -qq wget ca-certificates unzip
-          wget -q -O /tmp/consul.zip https://releases.hashicorp.com/consul/1.20.1/consul_1.20.1_linux_amd64.zip
-          unzip -o /tmp/consul.zip -d /envoy-bin/
-          wget -q -O /envoy-bin/envoy https://github.com/envoyproxy/envoy/releases/download/v1.33.1/envoy-1.33.1-linux-x86_64
-          chmod +x /envoy-bin/consul /envoy-bin/envoy
-          rm -f /tmp/consul.zip
-        fi
-        export PATH="/envoy-bin:$$PATH"
-      
-        # Warten bis Agent bereit
-        until wget -qO- http://localhost:8500/v1/status/leader | grep -q ":8300"; do sleep 2; done
-      
-        echo "Starting Envoy sidecar for $$APP_SERVICE_NAME..."
-        exec consul connect envoy -sidecar-for $$APP_SERVICE_NAME -ignore-envoy-compatibility
-      '
-    depends_on:
-      - consul-agent
-
   # ============================================
   # DATABASE
   # ============================================
