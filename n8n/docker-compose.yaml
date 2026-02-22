@@ -97,50 +97,53 @@ services:
       - consul-agent
 
   # ============================================
-  # ENVOY INSTALLER
-  # Einmaliger Init-Container: lädt Envoy Binary
-  # in ein geteiltes Volume. Läuft nur einmal,
-  # danach ist das Binary gecacht im Volume.
-  # ============================================
-  envoy-installer:
-    image: debian:bookworm-slim
-    container_name: envoy-installer
-    restart: "no"
-    volumes:
-      - envoy-bin:/envoy-bin
-    command: |
-      sh -c '
-        if [ -f /envoy-bin/envoy ]; then
-          echo "Envoy already installed, skipping."
-          exit 0
-        fi
-        echo "Downloading Envoy binary..."
-        apt-get update -qq && apt-get install -y -qq wget ca-certificates
-        wget -q -O /envoy-bin/envoy "https://github.com/envoyproxy/envoy/releases/download/v1.29.7/envoy-1.29.7-linux-x86_64"
-        chmod +x /envoy-bin/envoy
-        echo "Done: $(/envoy-bin/envoy --version)"
-      '
-
-  # ============================================
   # ENVOY SIDECAR
-  # Läuft neben n8n und übernimmt den ausgehenden
-  # Verkehr zu reactive-resume via mTLS.
+  # Debian-basiert (glibc) damit Envoy läuft.
+  # Lädt beim ersten Start Consul + Envoy herunter,
+  # danach gecacht im Volume.
   # Erreichbar für n8n unter localhost:19000
   # ============================================
   envoy-sidecar:
-    image: hashicorp/consul:${CONSUL_VERSION:-latest}
+    image: debian:bookworm-slim
     container_name: envoy-sidecar
     restart: unless-stopped
     network_mode: host
     volumes:
-      - envoy-bin:/usr/local/bin  # Envoy Binary aus dem Installer-Volume
+      - envoy-bin:/envoy-bin
     environment:
       - CONSUL_HTTP_ADDR=localhost:8500
-    command: connect envoy -sidecar-for ${N8N_SERVICE_NAME:-n8n}
+      - N8N_SERVICE_NAME=${N8N_SERVICE_NAME:-n8n}
+      - CONSUL_VERSION=${CONSUL_VERSION:-1.22.3}
+      - PATH=/envoy-bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    command: |
+      sh -c '
+        # Consul Binary installieren falls nicht vorhanden
+        if [ ! -f /envoy-bin/consul ]; then
+          echo "Downloading Consul binary..."
+          apt-get update -qq && apt-get install -y -qq wget ca-certificates unzip
+          wget -q -O /tmp/consul.zip "https://releases.hashicorp.com/consul/$${CONSUL_VERSION}/consul_$${CONSUL_VERSION}_linux_amd64.zip"
+          unzip -q /tmp/consul.zip -d /envoy-bin/
+          chmod +x /envoy-bin/consul
+          echo "Consul installed: $$(/envoy-bin/consul version | head -1)"
+        fi
+
+        # Envoy Binary installieren falls nicht vorhanden
+        if [ ! -f /envoy-bin/envoy ]; then
+          echo "Downloading Envoy binary..."
+          apt-get update -qq && apt-get install -y -qq wget ca-certificates
+          wget -q -O /envoy-bin/envoy "https://github.com/envoyproxy/envoy/releases/download/v1.29.7/envoy-1.29.7-linux-x86_64"
+          chmod +x /envoy-bin/envoy
+          echo "Envoy installed: $$(/envoy-bin/envoy --version)"
+        fi
+
+        export PATH="/envoy-bin:$$PATH"
+
+        echo "Starting Envoy sidecar for $$N8N_SERVICE_NAME..."
+        exec consul connect envoy -sidecar-for $$N8N_SERVICE_NAME
+      '
     depends_on:
       - consul-agent
       - consul-register
-      - envoy-installer
 
   db:
     image: postgres:16
