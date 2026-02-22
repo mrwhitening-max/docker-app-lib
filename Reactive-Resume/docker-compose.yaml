@@ -2,7 +2,7 @@ name: reactive_resume
 
 services:
   # ============================================
-  # CONSUL AGENT
+  # CONSUL & MESH CORE
   # ============================================
   consul-agent:
     image: hashicorp/consul:1.20.1
@@ -20,9 +20,6 @@ services:
       -config-file=/consul/config/consul.hcl
       -retry-join=${CONSUL_SERVER_IP}
 
-  # ============================================
-  # SERVICE REGISTRATION
-  # ============================================
   consul-register:
     image: curlimages/curl:latest
     container_name: consul-register
@@ -32,16 +29,14 @@ services:
       - CONSUL_HTTP_ADDR=localhost:8500
       - APP_PORT=${APP_PORT:-3000}
       - APP_SERVICE_NAME=${APP_SERVICE_NAME:-reactive-resume}
-      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
-      - POSTGRES_SERVICE_NAME=${POSTGRES_SERVICE_NAME:-reactive-resume-postgres}
       - INTERFACE=${NETWORK_INTERFACE:-eth0}
     command: |
       sh -c '
         while true; do
           LXC_IP=$$(ip -4 addr show $$INTERFACE | grep inet | awk "{print \$$2}" | cut -d/ -f1 | head -1)
           if [ -z "$$LXC_IP" ]; then sleep 10; continue; fi
-
-          echo "Registering reactive-resume with Sidecar at $$LXC_IP..."
+          
+          echo "Registering reactive-resume (LXC IP: $$LXC_IP) with Sidecar..."
           curl -s -X PUT http://localhost:8500/v1/agent/service/register -d "{
             \"Name\": \"$$APP_SERVICE_NAME\",
             \"Port\": $$APP_PORT,
@@ -49,23 +44,12 @@ services:
             \"Connect\": { \"SidecarService\": {} },
             \"Check\": { \"HTTP\": \"http://$$LXC_IP:$$APP_PORT/api/health\", \"Interval\": \"15s\" }
           }"
-
-          echo "Registering postgres service..."
-          curl -s -X PUT http://localhost:8500/v1/agent/service/register -d "{
-            \"Name\": \"$$POSTGRES_SERVICE_NAME\",
-            \"Port\": $$POSTGRES_PORT,
-            \"Address\": \"$$LXC_IP\",
-            \"Check\": { \"TCP\": \"$$LXC_IP:$$POSTGRES_PORT\", \"Interval\": \"15s\" }
-          }"
           sleep 300
         done
       '
     depends_on:
       - consul-agent
 
-  # ============================================
-  # ENVOY SIDECAR
-  # ============================================
   envoy-sidecar:
     image: debian:bookworm-slim
     container_name: envoy-sidecar
@@ -74,7 +58,6 @@ services:
     volumes:
       - envoy-bin:/envoy-bin
     environment:
-      - CONSUL_HTTP_ADDR=localhost:8500
       - APP_SERVICE_NAME=${APP_SERVICE_NAME:-reactive-resume}
     command: |
       sh -c '
@@ -91,16 +74,13 @@ services:
         until wget -qO- http://localhost:8500/v1/status/leader | grep -q ":8300"; do sleep 2; done
         exec consul connect envoy -sidecar-for $$APP_SERVICE_NAME -ignore-envoy-compatibility
       '
-    depends_on:
-      - consul-agent
 
   # ============================================
-  # APP SERVICES (Alle im Host-Netzwerk)
+  # APP & INFRASTRUCTURE (Host-Mode)
   # ============================================
   postgres:
-    image: postgres:16-alpine # 18 gibt es noch nicht, 16 ist stabil
-    container_name: reactive-resume-postgres
-    restart: unless-stopped
+    image: postgres:16-alpine
+    container_name: postgres
     network_mode: host
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-postgres}
@@ -114,7 +94,7 @@ services:
     container_name: browserless
     network_mode: host
     environment:
-      - PORT=3001 # Port verschoben, da App auf 3000 lauscht
+      - PORT=3001 # Verschoben, da App auf 3000 lauscht
       - TOKEN=${BROWSERLESS_TOKEN:-changeme}
 
   seaweedfs:
@@ -125,6 +105,17 @@ services:
     volumes:
       - seaweedfs_data:/data
 
+  seaweedfs_create_bucket:
+    image: quay.io/minio/mc:latest
+    network_mode: host
+    entrypoint: >
+      /bin/sh -c "
+        sleep 10;
+        mc alias set seaweedfs http://127.0.0.1:8333 ${S3_ACCESS_KEY:-seaweedfs} ${S3_SECRET_ACCESS_KEY:-seaweedfs};
+        mc mb seaweedfs/${S3_BUCKET:-reactive-resume} || true;
+        exit 0;
+      "
+
   reactive_resume:
     image: amruthpillai/reactive-resume:v5.0.9
     container_name: reactive_resume
@@ -132,6 +123,7 @@ services:
     environment:
       - TZ=Europe/Berlin
       - NODE_ENV=production
+      # WICHTIG: APP_URL & S3_URL müssen von DEINEM Browser erreichbar sein (LXC IP oder Domain)
       - APP_URL=${APP_URL:-http://localhost:3000}
       - PRINTER_APP_URL=http://127.0.0.1:3000
       - PRINTER_ENDPOINT=ws://127.0.0.1:3001?token=${BROWSERLESS_TOKEN:-changeme}
@@ -145,15 +137,13 @@ services:
       - S3_FORCE_PATH_STYLE=true
     volumes:
       - reactive_resume_data:/app/data
-    depends_on:
-      - postgres
 
 volumes:
   postgres_data:
   seaweedfs_data:
   reactive_resume_data:
   consul_data:
-  envoy-bin: # Fix: Volume deklariert
+  envoy-bin:
 
 configs:
   consul_config:
