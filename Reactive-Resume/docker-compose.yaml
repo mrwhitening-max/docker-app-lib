@@ -77,19 +77,20 @@ services:
       # Server
       - TZ=Etc/UTC
       - NODE_ENV=production
-      - APP_URL=http://localhost:3000
-      - PRINTER_APP_URL=http://reactive_resume:3000
+      - APP_URL=${APP_URL}
+      - PRINTER_APP_URL=${PRINTER_APP_URL}
       # Printer
       - PRINTER_ENDPOINT=ws://browserless:3000?token=1234567890
       # - PRINTER_ENDPOINT=http://chrome:9222 # Or, if you're using chromedp/headless-shell
       # Database
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/postgres
       # Authentication
-      - AUTH_SECRET=change-me-to-a-secure-secret-key-in-production
+      - AUTH_SECRET=${AUTH_SECRET}
       # Storage
       - S3_ACCESS_KEY_ID=seaweedfs
       - S3_SECRET_ACCESS_KEY=seaweedfs
       - S3_ENDPOINT=http://seaweedfs:8333
+      - S3_URL=${PRINTER_APP_URL}
       - S3_BUCKET=reactive-resume
       - S3_FORCE_PATH_STYLE=true
     volumes:
