@@ -119,32 +119,30 @@ services:
       sh -c '
         set -e
       
-        # Sicherstellen, dass wir nicht versuchen, "latest" als Pfad herunterzuladen
-        if [ "$$CONSUL_VERSION" = "latest" ]; then
-          REAL_CONSUL_VER="1.20.1"
-        else
-          REAL_CONSUL_VER="$$CONSUL_VERSION"
-        fi
+        # Sicherstellen, dass wir eine valide Consul-Version nutzen
+        REAL_CONSUL_VER="${CONSUL_VERSION:-1.20.1}"
+        [ "$$REAL_CONSUL_VER" = "latest" ] && REAL_CONSUL_VER="1.20.1"
       
         install_consul() {
           if [ ! -f /envoy-bin/consul ]; then
             echo "Installing Consul $$REAL_CONSUL_VER..."
             apt-get update -qq && apt-get install -y -qq wget ca-certificates unzip
             URL="https://releases.hashicorp.com/consul/$$REAL_CONSUL_VER/consul_$${REAL_CONSUL_VER}_linux_amd64.zip"
-            wget -q -O /tmp/consul.zip "$$URL" || { echo "ERROR: Consul Download failed"; exit 1; }
+            wget -q -O /tmp/consul.zip "$$URL"
             unzip -o /tmp/consul.zip -d /envoy-bin/
             chmod +x /envoy-bin/consul
-            rm /tmp/consul.zip
+            rm -f /tmp/consul.zip
           fi
         }
       
         install_envoy() {
           if [ ! -f /envoy-bin/envoy ]; then
-            echo "Installing Envoy v1.31.5 (required for newer Consul)..."
+            # UPDATE: Sprung auf 1.32.3 um Consul 1.22+ zufrieden zu stellen
+            echo "Installing Envoy v1.32.3..."
             apt-get update -qq && apt-get install -y -qq wget ca-certificates
-            # Version 1.31.5 ist kompatibel mit Consul 1.20+
-            wget -q -O /envoy-bin/envoy "https://github.com/envoyproxy/envoy/releases/download/v1.31.5/envoy-1.31.5-linux-x86_64" || { echo "ERROR: Envoy download failed"; exit 1; }
+            wget -q -O /envoy-bin/envoy "https://github.com/envoyproxy/envoy/releases/download/v1.32.3/envoy-1.32.3-linux-x86_64"
             chmod +x /envoy-bin/envoy
+            echo "Envoy v1.32.3 installed."
           fi
         }
       
@@ -159,10 +157,8 @@ services:
         done
       
         echo "Starting Envoy sidecar for $$N8N_SERVICE_NAME..."
-        # Wir lassen -ignore-envoy-compatibility sicherheitshalber drin
         exec consul connect envoy -sidecar-for $$N8N_SERVICE_NAME -ignore-envoy-compatibility
       '
-
   db:
     image: postgres:16
     container_name: n8n-postgres
