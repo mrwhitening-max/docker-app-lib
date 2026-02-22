@@ -1,6 +1,99 @@
 name: reactive_resume
 
 services:
+
+  # ============================================
+  # CONSUL
+  # ============================================
+
+  consul-agent:
+    image: hashicorp/consul:${CONSUL_VERSION:-latest}
+    container_name: consul-agent
+    hostname: ${CONSUL_NODE_NAME:-reactive-resume}
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - consul_data:/consul/data
+    configs:
+      - source: consul_config
+        target: /consul/config/consul.hcl
+    command: >
+      agent
+      -config-file=/consul/config/consul.hcl
+      -retry-join=${CONSUL_SERVER_IP}
+
+  consul-register:
+    image: curlimages/curl:latest
+    container_name: consul-register
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - CONSUL_HTTP_ADDR=localhost:8500
+      - APP_PORT=${APP_PORT:-3000}
+      - APP_SERVICE_NAME=${APP_SERVICE_NAME:-reactive-resume}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_SERVICE_NAME=${POSTGRES_SERVICE_NAME:-reactive-resume-postgres}
+      - SERVICE_TAGS=${SERVICE_TAGS:-}
+      - INTERFACE=${NETWORK_INTERFACE:-eth0}
+      - RE_REGISTER_INTERVAL=${RE_REGISTER_INTERVAL:-300}
+    command: |
+      sh -c '
+        echo "=== Consul Service Registration Daemon ==="
+
+        while true; do
+          echo "Detecting LXC IP address..."
+          LXC_IP=$$(ip -4 addr show $$INTERFACE | grep inet | awk "{print \$$2}" | cut -d/ -f1 | head -1)
+
+          if [ -z "$$LXC_IP" ]; then
+            echo "ERROR: Could not detect IP address on interface $$INTERFACE"
+            echo "Available interfaces:"
+            ip addr show
+            echo "Retrying in 30 seconds..."
+            sleep 30
+            continue
+          fi
+
+          echo "Detected IP: $$LXC_IP"
+          echo "Waiting for Consul Agent..."
+          sleep 10
+
+          echo "Registering reactive-resume service..."
+          curl -X PUT http://$$CONSUL_HTTP_ADDR/v1/agent/service/register -d "{
+            \"Name\": \"$$APP_SERVICE_NAME\",
+            \"Port\": $$APP_PORT,
+            \"Address\": \"$$LXC_IP\",
+            \"Tags\": [\"resume\", \"web\", \"$$SERVICE_TAGS\"],
+            \"Check\": {
+              \"HTTP\": \"http://$$LXC_IP:$$APP_PORT/api/health\",
+              \"Interval\": \"15s\",
+              \"Timeout\": \"3s\"
+            }
+          }"
+
+          echo "Registering postgres service..."
+          curl -X PUT http://$$CONSUL_HTTP_ADDR/v1/agent/service/register -d "{
+            \"Name\": \"$$POSTGRES_SERVICE_NAME\",
+            \"Port\": $$POSTGRES_PORT,
+            \"Address\": \"$$LXC_IP\",
+            \"Tags\": [\"database\", \"postgres\", \"$$SERVICE_TAGS\"],
+            \"Check\": {
+              \"TCP\": \"$$LXC_IP:$$POSTGRES_PORT\",
+              \"Interval\": \"10s\"
+            }
+          }"
+
+          echo "Services registered successfully at $$LXC_IP!"
+          echo "Next re-registration in $$RE_REGISTER_INTERVAL seconds..."
+          sleep $$RE_REGISTER_INTERVAL
+        done
+      '
+    depends_on:
+      - consul-agent
+
+  # ============================================
+  # DATABASE
+  # ============================================
+
   postgres:
     image: postgres:latest
     restart: unless-stopped
@@ -10,12 +103,18 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
     volumes:
       - postgres_data:/var/lib/postgresql
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-postgres}", "-d", "${POSTGRES_DB:-postgres}"]
       start_period: 10s
       interval: 30s
       timeout: 10s
       retries: 3
+
+  # ============================================
+  # PRINTER
+  # ============================================
 
   browserless:
     image: ghcr.io/browserless/chromium:latest
@@ -30,6 +129,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+
+  # ============================================
+  # STORAGE
+  # ============================================
 
   seaweedfs:
     image: chrislusf/seaweedfs:latest
@@ -63,6 +166,10 @@ services:
       seaweedfs:
         condition: service_healthy
 
+  # ============================================
+  # APP
+  # ============================================
+
   reactive_resume:
     image: amruthpillai/reactive-resume:latest
     environment:
@@ -85,9 +192,9 @@ services:
       - S3_BUCKET=${S3_BUCKET:-reactive-resume}
       - S3_FORCE_PATH_STYLE=true
     volumes:
-      - /data/reactive_resume_data:/app/data
+      - reactive_resume_data:/app/data
     ports:
-      - "3000:3000"
+      - "${APP_PORT:-3000}:3000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -106,3 +213,25 @@ volumes:
   postgres_data:
   seaweedfs_data:
   reactive_resume_data:
+  consul_data:
+
+configs:
+  consul_config:
+    content: |
+      datacenter = "${CONSUL_DATACENTER}"
+      data_dir = "/consul/data"
+      log_level = "${CONSUL_LOG_LEVEL:-INFO}"
+
+      server = false
+      client_addr = "0.0.0.0"
+
+      bind_addr = "{{ GetInterfaceIP \"eth0\" }}"
+      advertise_addr = "{{ GetInterfaceIP \"eth0\" }}"
+
+      rejoin_after_leave = true
+
+      performance {
+        raft_multiplier = 1
+      }
+
+      recursors = ["8.8.8.8", "1.1.1.1"]
