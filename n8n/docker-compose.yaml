@@ -105,7 +105,7 @@ services:
   # ============================================
   envoy-sidecar:
     # Wir nutzen das Image, das Consul und Envoy bereits perfekt kombiniert
-    image: hashicorp/consul-envoy:${CONSUL_VERSION:-1.20.1}
+    image: hashicorp/consul-envoy:${CONSUL_VERSION:-1.22.4}
     container_name: envoy-sidecar
     restart: unless-stopped
     network_mode: host
