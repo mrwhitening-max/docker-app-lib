@@ -1,4 +1,4 @@
-sservices:
+services:
   consul-agent:
     image: hashicorp/consul:1.22.3
     container_name: consul-agent
