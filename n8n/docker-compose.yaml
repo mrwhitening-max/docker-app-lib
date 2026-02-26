@@ -1,6 +1,6 @@
-services:
+sservices:
   consul-agent:
-    image: hashicorp/consul:1.20.1
+    image: hashicorp/consul:1.22.3
     container_name: consul-agent
     hostname: ${CONSUL_NODE_NAME:-consul-agent}
     restart: unless-stopped
@@ -10,6 +10,10 @@ services:
     configs:
       - source: consul_config
         target: /consul/config/consul.hcl
+      - source: n8n_service
+        target: /consul/config/n8n-service.hcl
+      - source: postgres_service
+        target: /consul/config/postgres-service.hcl
     command: >
       agent
       -config-file=/consul/config/consul.hcl
