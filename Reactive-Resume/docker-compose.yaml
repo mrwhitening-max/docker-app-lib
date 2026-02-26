@@ -7,7 +7,7 @@ services:
   # ============================================
 
   consul-agent:
-    image: hashicorp/consul:1.20.1
+    image: hashicorp/consul:1.22.3
     container_name: consul-agent
     hostname: ${CONSUL_NODE_NAME:-reactive-resume}
     restart: unless-stopped
@@ -17,72 +17,14 @@ services:
     configs:
       - source: consul_config
         target: /consul/config/consul.hcl
+      - source: reactive_resume_service
+        target: /consul/config/reactive-resume-service.hcl
+      - source: postgres_service
+        target: /consul/config/postgres-service.hcl
     command: >
       agent
       -config-file=/consul/config/consul.hcl
       -retry-join=${CONSUL_SERVER_IP}
-
-  consul-register:
-    image: curlimages/curl:latest
-    container_name: consul-register
-    restart: unless-stopped
-    network_mode: host
-    environment:
-      - CONSUL_HTTP_ADDR=localhost:8500
-      - APP_PORT=${APP_PORT:-3000}
-      - APP_SERVICE_NAME=${APP_SERVICE_NAME:-reactive-resume}
-      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
-      - POSTGRES_SERVICE_NAME=${POSTGRES_SERVICE_NAME:-reactive-resume-postgres}
-      - SERVICE_TAGS=${SERVICE_TAGS:-}
-      - INTERFACE=${NETWORK_INTERFACE:-eth0}
-      - RE_REGISTER_INTERVAL=${RE_REGISTER_INTERVAL:-300}
-    command: |
-      sh -c '
-        echo "=== Consul Service Registration Daemon ==="
-        while true; do
-          LXC_IP=$$(ip -4 addr show $$INTERFACE | grep inet | awk "{print \$$2}" | cut -d/ -f1 | head -1)
-          if [ -z "$$LXC_IP" ]; then
-            echo "Waiting for IP on $$INTERFACE..."
-            sleep 10
-            continue
-          fi
-
-          echo "Registering Services at $$LXC_IP..."
-
-          # Reactive Resume mit Sidecar (einmalig, korrekt)
-          curl -s -X PUT http://localhost:8500/v1/agent/service/register -d "{
-            \"Name\": \"$$APP_SERVICE_NAME\",
-            \"Port\": $$APP_PORT,
-            \"Address\": \"$$LXC_IP\",
-            \"Tags\": [\"resume\", \"web\", \"$$SERVICE_TAGS\"],
-            \"Connect\": {
-              \"SidecarService\": {}
-            },
-            \"Check\": {
-              \"HTTP\": \"http://$$LXC_IP:$$APP_PORT/api/health\",
-              \"Interval\": \"15s\",
-              \"Timeout\": \"3s\"
-            }
-          }"
-
-          # Postgres
-          curl -s -X PUT http://localhost:8500/v1/agent/service/register -d "{
-            \"Name\": \"$$POSTGRES_SERVICE_NAME\",
-            \"Port\": $$POSTGRES_PORT,
-            \"Address\": \"$$LXC_IP\",
-            \"Tags\": [\"database\", \"postgres\", \"$$SERVICE_TAGS\"],
-            \"Check\": {
-              \"TCP\": \"$$LXC_IP:$$POSTGRES_PORT\",
-              \"Interval\": \"10s\"
-            }
-          }"
-
-          echo "Services registered. Next run in $$RE_REGISTER_INTERVAL seconds..."
-          sleep $$RE_REGISTER_INTERVAL
-        done
-      '
-    depends_on:
-      - consul-agent
 
   envoy-sidecar:
     image: debian:bookworm-slim
@@ -98,11 +40,10 @@ services:
       sh -c '
         set -e
 
-        # Tools immer installieren
         apt-get update -qq && apt-get install -y -qq wget curl ca-certificates unzip
 
         if [ ! -f /envoy-bin/envoy ]; then
-          wget -q -O /tmp/consul.zip https://releases.hashicorp.com/consul/1.20.1/consul_1.20.1_linux_amd64.zip
+          wget -q -O /tmp/consul.zip https://releases.hashicorp.com/consul/1.22.3/consul_1.22.3_linux_amd64.zip
           unzip -o /tmp/consul.zip -d /envoy-bin/
           wget -q -O /envoy-bin/envoy https://github.com/envoyproxy/envoy/releases/download/v1.33.1/envoy-1.33.1-linux-x86_64
           chmod +x /envoy-bin/consul /envoy-bin/envoy
@@ -120,7 +61,6 @@ services:
       '
     depends_on:
       - consul-agent
-      - consul-register
 
   # ============================================
   # DATABASE
@@ -260,3 +200,34 @@ configs:
       connect { enabled = true }
       ports { grpc = 8502 }
       rejoin_after_leave = true
+
+  reactive_resume_service:
+    content: |
+      service {
+        name = "reactive-resume"
+        port = ${APP_PORT:-3000}
+        tags = ["resume", "web"]
+
+        connect {
+          sidecar_service {}
+        }
+
+        check {
+          http     = "http://127.0.0.1:${APP_PORT:-3000}/api/health"
+          interval = "15s"
+          timeout  = "3s"
+        }
+      }
+
+  postgres_service:
+    content: |
+      service {
+        name = "reactive-resume-postgres"
+        port = ${POSTGRES_PORT:-5432}
+        tags = ["database", "postgres"]
+
+        check {
+          tcp      = "127.0.0.1:${POSTGRES_PORT:-5432}"
+          interval = "10s"
+        }
+      }
