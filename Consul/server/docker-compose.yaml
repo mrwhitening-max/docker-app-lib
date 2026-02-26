@@ -13,6 +13,89 @@ services:
         target: /consul/config/consul-server.hcl
     command: agent -config-file=/consul/config/consul-server.hcl
 
+  consul-init:
+    image: curlimages/curl:latest
+    container_name: consul-init
+    restart: on-failure
+    network_mode: host
+    command: |
+      sh -c '
+        echo "=== Consul Day-0 Init ==="
+
+        echo "Waiting for Consul Server..."
+        until curl -sf http://localhost:8500/v1/status/leader | grep -q ":8300"; do
+          sleep 2
+        done
+        echo "Consul ready."
+
+        echo "Setting service-defaults: reactive-resume..."
+        curl -s -X PUT http://localhost:8500/v1/config \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"Kind\": \"service-defaults\",
+            \"Name\": \"reactive-resume\",
+            \"Protocol\": \"http\"
+          }"
+
+        echo "Setting service-defaults: n8n..."
+        curl -s -X PUT http://localhost:8500/v1/config \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"Kind\": \"service-defaults\",
+            \"Name\": \"n8n\",
+            \"Protocol\": \"http\",
+            \"UpstreamConfig\": {
+              \"Overrides\": [
+                {
+                  \"Name\": \"reactive-resume\",
+                  \"PassiveHealthCheck\": {
+                    \"Interval\": \"10s\",
+                    \"MaxFailures\": 3,
+                    \"EnforcingConsecutive5xx\": 100
+                  }
+                }
+              ]
+            }
+          }"
+
+        echo "Setting service-resolver: reactive-resume..."
+        curl -s -X PUT http://localhost:8500/v1/config \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"Kind\": \"service-resolver\",
+            \"Name\": \"reactive-resume\",
+            \"ConnectTimeout\": \"5s\"
+          }"
+
+        echo "Setting intention: allow n8n -> reactive-resume..."
+        curl -s -X POST http://localhost:8500/v1/connect/intentions \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"SourceNS\": \"default\",
+            \"SourceName\": \"n8n\",
+            \"DestinationNS\": \"default\",
+            \"DestinationName\": \"reactive-resume\",
+            \"Action\": \"allow\",
+            \"Description\": \"n8n darf reactive-resume erreichen\"
+          }"
+
+        echo "Setting intention: deny all..."
+        curl -s -X POST http://localhost:8500/v1/connect/intentions \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"SourceNS\": \"default\",
+            \"SourceName\": \"*\",
+            \"DestinationNS\": \"default\",
+            \"DestinationName\": \"*\",
+            \"Action\": \"deny\",
+            \"Description\": \"Default deny all\"
+          }"
+
+        echo "=== Day-0 Init complete ==="
+      '
+    depends_on:
+      - consul-server
+
 volumes:
   consul-data:
 
