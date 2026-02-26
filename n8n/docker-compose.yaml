@@ -19,68 +19,6 @@ services:
       -config-file=/consul/config/consul.hcl
       -retry-join=${CONSUL_SERVER_IP}
 
-  consul-register:
-    image: curlimages/curl:latest
-    container_name: consul-register
-    restart: unless-stopped
-    network_mode: host
-    environment:
-      - CONSUL_HTTP_ADDR=localhost:8500
-      - N8N_PORT=${N8N_PORT:-5678}
-      - N8N_SERVICE_NAME=${N8N_SERVICE_NAME:-n8n}
-      - N8N_HEALTH_PATH=${N8N_HEALTH_PATH:-/healthz}
-      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
-      - POSTGRES_SERVICE_NAME=${POSTGRES_SERVICE_NAME:-n8n-postgres}
-      - SERVICE_TAGS=${SERVICE_TAGS:-automation}
-      - INTERFACE=${NETWORK_INTERFACE:-eth0}
-      - RE_REGISTER_INTERVAL=${RE_REGISTER_INTERVAL:-300}
-    command: |
-      sh -c '
-        echo "=== Consul Service Registration Daemon ==="
-        while true; do
-          LXC_IP=$$(ip -4 addr show $$INTERFACE | grep inet | awk "{print \$$2}" | cut -d/ -f1 | head -1)
-          if [ -z "$$LXC_IP" ]; then
-            echo "Waiting for IP on $$INTERFACE..."
-            sleep 10
-            continue
-          fi
-
-          echo "Registering Services at $$LXC_IP..."
-          
-          # n8n mit Envoy-Upstream für Reactive Resume
-          curl -s -X PUT http://localhost:8500/v1/agent/service/register -d "{
-            \"Name\": \"$$N8N_SERVICE_NAME\",
-            \"Port\": $$N8N_PORT,
-            \"Address\": \"$$LXC_IP\",
-            \"Tags\": [\"automation\", \"$$SERVICE_TAGS\"],
-            \"Connect\": {
-              \"SidecarService\": {
-                \"Proxy\": {
-                  \"Upstreams\": [{ \"DestinationName\": \"reactive-resume\", \"LocalBindPort\": 19001 }]
-                }
-              }
-            },
-            \"Check\": {
-              \"HTTP\": \"http://$$LXC_IP:$$N8N_PORT$$N8N_HEALTH_PATH\",
-              \"Interval\": \"15s\"
-            }
-          }"
-
-          # Postgres Registration
-          curl -s -X PUT http://localhost:8500/v1/agent/service/register -d "{
-            \"Name\": \"$$POSTGRES_SERVICE_NAME\",
-            \"Port\": $$POSTGRES_PORT,
-            \"Address\": \"$$LXC_IP\",
-            \"Tags\": [\"database\", \"$$SERVICE_TAGS\"],
-            \"Check\": { \"TCP\": \"$$LXC_IP:$$POSTGRES_PORT\", \"Interval\": \"15s\" }
-          }"
-
-          sleep $$RE_REGISTER_INTERVAL
-        done
-      '
-    depends_on:
-      - consul-agent
-
   envoy-sidecar:
     image: debian:bookworm-slim
     container_name: envoy-sidecar
@@ -94,31 +32,28 @@ services:
     command: |
       sh -c '
         set -e
-      
-        # Tools immer installieren (idempotent, schnell wenn cached)
+
         apt-get update -qq && apt-get install -y -qq wget curl ca-certificates unzip
-      
-        # Binaries nur laden falls nicht vorhanden
+
         if [ ! -f /envoy-bin/envoy ]; then
-          wget -q -O /tmp/consul.zip https://releases.hashicorp.com/consul/1.20.1/consul_1.20.1_linux_amd64.zip
+          wget -q -O /tmp/consul.zip https://releases.hashicorp.com/consul/1.22.3/consul_1.22.3_linux_amd64.zip
           unzip -o /tmp/consul.zip -d /envoy-bin/
           wget -q -O /envoy-bin/envoy https://github.com/envoyproxy/envoy/releases/download/v1.33.1/envoy-1.33.1-linux-x86_64
           chmod +x /envoy-bin/consul /envoy-bin/envoy
           rm -f /tmp/consul.zip
           echo "Binaries installed."
         fi
-      
+
         export PATH="/envoy-bin:$$PATH"
-      
+
         echo "Waiting for Consul Agent..."
         until curl -sf http://localhost:8500/v1/status/leader | grep -q ":8300"; do sleep 2; done
-      
+
         echo "Starting Envoy sidecar for $$N8N_SERVICE_NAME..."
         exec consul connect envoy -sidecar-for $$N8N_SERVICE_NAME -ignore-envoy-compatibility
       '
     depends_on:
       - consul-agent
-      - consul-register
 
   db:
     image: postgres:16
@@ -173,3 +108,43 @@ configs:
       advertise_addr = "{{ GetInterfaceIP \"eth0\" }}"
       connect { enabled = true }
       ports { grpc = 8502 }
+
+  n8n_service:
+    content: |
+      service {
+        name = "n8n"
+        port = ${N8N_PORT:-5678}
+        tags = ["automation"]
+
+        connect {
+          sidecar_service {
+            proxy {
+              upstreams = [
+                {
+                  destination_name = "reactive-resume"
+                  local_bind_port  = 19001
+                }
+              ]
+            }
+          }
+        }
+
+        check {
+          http     = "http://127.0.0.1:${N8N_PORT:-5678}/healthz"
+          interval = "15s"
+          timeout  = "3s"
+        }
+      }
+
+  postgres_service:
+    content: |
+      service {
+        name = "n8n-postgres"
+        port = ${POSTGRES_PORT:-5432}
+        tags = ["database"]
+
+        check {
+          tcp      = "127.0.0.1:${POSTGRES_PORT:-5432}"
+          interval = "10s"
+        }
+      }
