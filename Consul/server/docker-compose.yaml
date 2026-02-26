@@ -115,6 +115,9 @@ configs:
 
       connect {
         enabled = true
+        ca_config {
+          leaf_cert_ttl = "24h"
+        }
       }
 
       ports {
