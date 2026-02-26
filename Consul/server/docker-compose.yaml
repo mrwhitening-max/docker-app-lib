@@ -1,8 +1,7 @@
 version: '3.8'
-
 services:
   consul-server:
-    image: hashicorp/consul:${CONSUL_VERSION:-latest}
+    image: hashicorp/consul:1.20.1
     container_name: consul-server
     hostname: consul-server
     restart: unless-stopped
@@ -23,18 +22,26 @@ configs:
       datacenter = "${CONSUL_DATACENTER}"
       data_dir = "/consul/data"
       log_level = "${CONSUL_LOG_LEVEL}"
-      
+
       server = true
       bootstrap_expect = 1
-      
+
       bind_addr = "${CONSUL_BIND_IP}"
       advertise_addr = "${CONSUL_ADVERTISE_IP}"
       client_addr = "0.0.0.0"
-      
+
+      connect {
+        enabled = true
+      }
+
+      ports {
+        grpc = 8502
+      }
+
       ui_config {
         enabled = true
       }
-      
+
       performance {
         raft_multiplier = 1
       }
