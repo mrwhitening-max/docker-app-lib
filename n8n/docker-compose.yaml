@@ -90,27 +90,25 @@ services:
     command: |
       sh -c '
         set -e
-        # Installation der Binaries falls Volume leer
+      
+        # Tools immer installieren (idempotent, schnell wenn cached)
+        apt-get update -qq && apt-get install -y -qq wget curl ca-certificates unzip
+      
+        # Binaries nur laden falls nicht vorhanden
         if [ ! -f /envoy-bin/envoy ]; then
-          apt-get update -qq && apt-get install -y -qq wget ca-certificates unzip
-          
-          # Consul Binary (passend zum Agent)
           wget -q -O /tmp/consul.zip https://releases.hashicorp.com/consul/1.20.1/consul_1.20.1_linux_amd64.zip
           unzip -o /tmp/consul.zip -d /envoy-bin/
-          
-          # Envoy Binary v1.33.1 (WICHTIG: Fixt den "too old" Fehler)
           wget -q -O /envoy-bin/envoy https://github.com/envoyproxy/envoy/releases/download/v1.33.1/envoy-1.33.1-linux-x86_64
-          
           chmod +x /envoy-bin/consul /envoy-bin/envoy
           rm -f /tmp/consul.zip
-          echo "Binaries installed successfully."
+          echo "Binaries installed."
         fi
-
+      
         export PATH="/envoy-bin:$$PATH"
-        
-        echo "Waiting for Consul Agent gRPC..."
-        until wget -qO- http://localhost:8500/v1/status/leader | grep -q ":8300"; do sleep 2; done
-
+      
+        echo "Waiting for Consul Agent..."
+        until curl -sf http://localhost:8500/v1/status/leader | grep -q ":8300"; do sleep 2; done
+      
         echo "Starting Envoy sidecar for $$N8N_SERVICE_NAME..."
         exec consul connect envoy -sidecar-for $$N8N_SERVICE_NAME -ignore-envoy-compatibility
       '
