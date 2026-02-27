@@ -3,8 +3,8 @@ services:
     image: quay.io/minio/aistor/minio:RELEASE.2026-02-07T07-43-34Z
     container_name: aistor-server
     ports:
-      - ${MINIO_S3_PORT:-9000}   # S3 API
-      - ${MINIO_WEB_CONSOLE_PORT:-9001}   # Web Console
+      - "${MINIO_S3_PORT:-9000}:9000"        # S3 API
+      - "${MINIO_WEB_CONSOLE_PORT:-9001}:9001" # Web Console
     environment:
       MINIO_ROOT_USER: ${MINIO_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD}
@@ -12,5 +12,5 @@ services:
       - /data/data:/mnt/data
       - /data/minio.license:/minio.license
       - /data/certs:/etc/minio/certs
-    command: minio server /mnt/data --license /minio.license --console-address ":9001"
+    command: minio server /mnt/data --license /minio.license --console-address ":${MINIO_WEB_CONSOLE_PORT:-9001}"
     restart: unless-stopped
