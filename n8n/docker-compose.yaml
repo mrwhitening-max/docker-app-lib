@@ -1,6 +1,8 @@
+version: '3.8'
+
 services:
   consul-agent:
-    image: hashicorp/consul:1.22.3
+    image: hashicorp/consul:${CONSUL_VERSION:-1.22.3}
     container_name: consul-agent
     hostname: ${CONSUL_NODE_NAME:-consul-agent}
     restart: unless-stopped
@@ -32,23 +34,18 @@ services:
     command: |
       sh -c '
         set -e
-
         apt-get update -qq && apt-get install -y -qq wget curl ca-certificates unzip
-
         if [ ! -f /envoy-bin/envoy ]; then
-          wget -q -O /tmp/consul.zip https://releases.hashicorp.com/consul/1.22.3/consul_1.22.3_linux_amd64.zip
+          wget -q -O /tmp/consul.zip https://releases.hashicorp.com/consul/${CONSUL_VERSION:-1.22.3}/consul_${CONSUL_VERSION:-1.22.3}_linux_amd64.zip
           unzip -o /tmp/consul.zip -d /envoy-bin/
           wget -q -O /envoy-bin/envoy https://github.com/envoyproxy/envoy/releases/download/v1.33.1/envoy-1.33.1-linux-x86_64
           chmod +x /envoy-bin/consul /envoy-bin/envoy
           rm -f /tmp/consul.zip
           echo "Binaries installed."
         fi
-
         export PATH="/envoy-bin:$$PATH"
-
         echo "Waiting for Consul Agent..."
         until curl -sf http://localhost:8500/v1/status/leader | grep -q ":8300"; do sleep 2; done
-
         echo "Starting Envoy sidecar for $$N8N_SERVICE_NAME..."
         exec consul connect envoy -sidecar-for $$N8N_SERVICE_NAME -ignore-envoy-compatibility
       '
@@ -100,12 +97,19 @@ volumes:
 configs:
   consul_config:
     content: |
-      datacenter = "${CONSUL_DATACENTER:-dc1}"
-      data_dir = "/consul/data"
-      server = false
-      client_addr = "0.0.0.0"
-      bind_addr = "{{ GetInterfaceIP \"eth0\" }}"
+      datacenter    = "${CONSUL_DATACENTER:-homelab}"
+      data_dir      = "/consul/data"
+      server        = false
+      log_level     = "${CONSUL_LOG_LEVEL:-INFO}"
+      client_addr   = "0.0.0.0"
+      bind_addr     = "{{ GetInterfaceIP \"eth0\" }}"
       advertise_addr = "{{ GetInterfaceIP \"eth0\" }}"
+
+      # Gossip Encryption
+      encrypt                 = "${CONSUL_GOSSIP_KEY}"
+      encrypt_verify_incoming = true
+      encrypt_verify_outgoing = true
+
       connect { enabled = true }
       ports { grpc = 8502 }
 
@@ -115,7 +119,6 @@ configs:
         name = "n8n"
         port = ${N8N_PORT:-5678}
         tags = ["automation"]
-
         connect {
           sidecar_service {
             proxy {
@@ -128,7 +131,6 @@ configs:
             }
           }
         }
-
         check {
           http     = "http://127.0.0.1:${N8N_PORT:-5678}/healthz"
           interval = "15s"
@@ -142,7 +144,6 @@ configs:
         name = "n8n-postgres"
         port = ${POSTGRES_PORT:-5432}
         tags = ["database"]
-
         check {
           tcp      = "127.0.0.1:${POSTGRES_PORT:-5432}"
           interval = "10s"
