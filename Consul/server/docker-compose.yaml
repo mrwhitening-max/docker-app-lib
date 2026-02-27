@@ -12,7 +12,6 @@ services:
       - source: consul_server_config
         target: /consul/config/consul-server.hcl
     command: agent -config-file=/consul/config/consul-server.hcl
-
   consul-init:
     image: curlimages/curl:latest
     container_name: consul-init
@@ -21,13 +20,11 @@ services:
     command: |
       sh -c '
         echo "=== Consul Day-0 Init ==="
-
         echo "Waiting for Consul Server..."
         until curl -sf http://localhost:8500/v1/status/leader | grep -q ":8300"; do
           sleep 2
         done
         echo "Consul ready."
-
         echo "Setting service-defaults: reactive-resume..."
         curl -s -X PUT http://localhost:8500/v1/config \
           -H "Content-Type: application/json" \
@@ -36,7 +33,6 @@ services:
             \"Name\": \"reactive-resume\",
             \"Protocol\": \"http\"
           }"
-
         echo "Setting service-defaults: n8n..."
         curl -s -X PUT http://localhost:8500/v1/config \
           -H "Content-Type: application/json" \
@@ -57,7 +53,6 @@ services:
               ]
             }
           }"
-
         echo "Setting service-resolver: reactive-resume..."
         curl -s -X PUT http://localhost:8500/v1/config \
           -H "Content-Type: application/json" \
@@ -66,7 +61,6 @@ services:
             \"Name\": \"reactive-resume\",
             \"ConnectTimeout\": \"5s\"
           }"
-
         echo "Setting intention: allow n8n -> reactive-resume..."
         curl -s -X POST http://localhost:8500/v1/connect/intentions \
           -H "Content-Type: application/json" \
@@ -78,7 +72,6 @@ services:
             \"Action\": \"allow\",
             \"Description\": \"n8n darf reactive-resume erreichen\"
           }"
-
         echo "Setting intention: deny all..."
         curl -s -X POST http://localhost:8500/v1/connect/intentions \
           -H "Content-Type: application/json" \
@@ -90,28 +83,28 @@ services:
             \"Action\": \"deny\",
             \"Description\": \"Default deny all\"
           }"
-
         echo "=== Day-0 Init complete ==="
       '
     depends_on:
       - consul-server
-
 volumes:
   consul-data:
-
 configs:
   consul_server_config:
     content: |
       datacenter = "${CONSUL_DATACENTER}"
-      data_dir = "/consul/data"
-      log_level = "${CONSUL_LOG_LEVEL}"
-
-      server = true
+      data_dir   = "/consul/data"
+      log_level  = "${CONSUL_LOG_LEVEL}"
+      server     = true
       bootstrap_expect = 1
-
-      bind_addr = "${CONSUL_BIND_IP}"
+      bind_addr      = "${CONSUL_BIND_IP}"
       advertise_addr = "${CONSUL_ADVERTISE_IP}"
-      client_addr = "0.0.0.0"
+      client_addr    = "0.0.0.0"
+
+      # Gossip Encryption
+      encrypt                 = "${CONSUL_GOSSIP_KEY}"
+      encrypt_verify_incoming = true
+      encrypt_verify_outgoing = true
 
       connect {
         enabled = true
@@ -119,15 +112,12 @@ configs:
           leaf_cert_ttl = "24h"
         }
       }
-
       ports {
         grpc = 8502
       }
-
       ui_config {
         enabled = true
       }
-
       performance {
         raft_multiplier = 1
       }
