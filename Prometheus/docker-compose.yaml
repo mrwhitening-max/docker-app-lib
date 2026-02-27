@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   consul-agent:
-    image: hashicorp/consul:1.22.3
+    image: hashicorp/consul:${CONSUL_VERSION:-1.22.3}
     container_name: consul-agent
     hostname: ${CONSUL_NODE_NAME:-consul-prometheus}
     restart: unless-stopped
@@ -19,6 +19,37 @@ services:
       -config-file=/consul/config/consul.hcl
       -retry-join=${CONSUL_SERVER_IP}
 
+  envoy-sidecar:
+    image: debian:bookworm-slim
+    container_name: envoy-sidecar
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - envoy-bin:/envoy-bin
+    environment:
+      - CONSUL_HTTP_ADDR=localhost:8500
+      - PROMETHEUS_SERVICE_NAME=${PROMETHEUS_SERVICE_NAME:-prometheus}
+    command: |
+      sh -c '
+        set -e
+        apt-get update -qq && apt-get install -y -qq wget curl ca-certificates unzip
+        if [ ! -f /envoy-bin/envoy ]; then
+          wget -q -O /tmp/consul.zip https://releases.hashicorp.com/consul/${CONSUL_VERSION:-1.22.3}/consul_${CONSUL_VERSION:-1.22.3}_linux_amd64.zip
+          unzip -o /tmp/consul.zip -d /envoy-bin/
+          wget -q -O /envoy-bin/envoy https://github.com/envoyproxy/envoy/releases/download/v1.33.1/envoy-1.33.1-linux-x86_64
+          chmod +x /envoy-bin/consul /envoy-bin/envoy
+          rm -f /tmp/consul.zip
+          echo "Binaries installed."
+        fi
+        export PATH="/envoy-bin:$$PATH"
+        echo "Waiting for Consul Agent..."
+        until curl -sf http://localhost:8500/v1/status/leader | grep -q ":8300"; do sleep 2; done
+        echo "Starting Envoy sidecar for $$PROMETHEUS_SERVICE_NAME..."
+        exec consul connect envoy -sidecar-for $$PROMETHEUS_SERVICE_NAME -ignore-envoy-compatibility
+      '
+    depends_on:
+      - consul-agent
+
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
@@ -32,7 +63,7 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention.time=15d'
+      - '--storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}'
       - '--web.enable-lifecycle'
     depends_on:
       - consul-agent
@@ -40,13 +71,15 @@ services:
 volumes:
   consul-data:
   prometheus-data:
+  envoy-bin:
 
 configs:
   consul_config:
     content: |
-      datacenter = "${CONSUL_DATACENTER:-dc1}"
+      datacenter = "${CONSUL_DATACENTER:-homelab}"
       data_dir   = "/consul/data"
       server     = false
+      log_level  = "${CONSUL_LOG_LEVEL:-INFO}"
       client_addr  = "0.0.0.0"
       bind_addr    = "{{ GetInterfaceIP \"eth0\" }}"
       advertise_addr = "{{ GetInterfaceIP \"eth0\" }}"
@@ -56,11 +89,13 @@ configs:
   prometheus_service:
     content: |
       service {
-        name = "prometheus"
+        name = "${PROMETHEUS_SERVICE_NAME:-prometheus}"
         port = ${PROMETHEUS_PORT:-9090}
         tags = ["monitoring", "metrics"]
         connect {
-          sidecar_service {}
+          sidecar_service {
+            proxy {}
+          }
         }
         check {
           http     = "http://127.0.0.1:${PROMETHEUS_PORT:-9090}/-/healthy"
@@ -77,12 +112,10 @@ configs:
 
       scrape_configs:
 
-        # Prometheus selbst
         - job_name: 'prometheus'
           static_configs:
             - targets: ['localhost:${PROMETHEUS_PORT:-9090}']
 
-        # Consul Metriken
         - job_name: 'consul'
           metrics_path: '/v1/agent/metrics'
           params:
@@ -94,18 +127,14 @@ configs:
               regex: 'consul'
               action: keep
 
-        # Alle Services automatisch via Consul Discovery
         - job_name: 'consul-services'
           consul_sd_configs:
             - server: 'localhost:8500'
           relabel_configs:
-            # Service Name als Job Label
             - source_labels: [__meta_consul_service]
               target_label: job
-            # Node Name als Instance Label
             - source_labels: [__meta_consul_node]
               target_label: instance
-            # Nur Services mit Tag "metrics" scrapen
             - source_labels: [__meta_consul_tags]
               regex: '.*,metrics,.*'
               action: keep
