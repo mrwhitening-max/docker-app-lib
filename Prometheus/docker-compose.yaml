@@ -76,13 +76,19 @@ volumes:
 configs:
   consul_config:
     content: |
-      datacenter = "${CONSUL_DATACENTER:-homelab}"
-      data_dir   = "/consul/data"
-      server     = false
-      log_level  = "${CONSUL_LOG_LEVEL:-INFO}"
-      client_addr  = "0.0.0.0"
-      bind_addr    = "{{ GetInterfaceIP \"eth0\" }}"
+      datacenter    = "${CONSUL_DATACENTER:-homelab}"
+      data_dir      = "/consul/data"
+      server        = false
+      log_level     = "${CONSUL_LOG_LEVEL:-INFO}"
+      client_addr   = "0.0.0.0"
+      bind_addr     = "{{ GetInterfaceIP \"eth0\" }}"
       advertise_addr = "{{ GetInterfaceIP \"eth0\" }}"
+
+      # Gossip Encryption
+      encrypt                 = "${CONSUL_GOSSIP_KEY}"
+      encrypt_verify_incoming = true
+      encrypt_verify_outgoing = true
+
       connect { enabled = true }
       ports { grpc = 8502 }
 
