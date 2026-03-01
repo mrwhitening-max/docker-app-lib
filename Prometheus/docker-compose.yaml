@@ -9,15 +9,23 @@ services:
     network_mode: host
     volumes:
       - consul-data:/consul/data
+    environment:
+      - CONSUL_CA_CERT_B64=${CONSUL_CA_CERT_B64}
     configs:
       - source: consul_config
         target: /consul/config/consul.hcl
       - source: prometheus_service
         target: /consul/config/prometheus-service.hcl
-    command: >
-      agent
-      -config-file=/consul/config/consul.hcl
-      -retry-join=${CONSUL_SERVER_IP}
+    entrypoint: >
+      sh -c '
+        echo "Preparing certs..."
+        mkdir -p /consul/certs
+        echo "$$CONSUL_CA_CERT_B64" | base64 -d > /consul/certs/consul-agent-ca.pem
+        echo "Certs ready."
+        exec consul agent
+          -config-file=/consul/config/consul.hcl
+          -retry-join=${CONSUL_SERVER_IP}
+      '
 
   envoy-sidecar:
     image: debian:bookworm-slim
@@ -88,6 +96,21 @@ configs:
       encrypt                 = "${CONSUL_GOSSIP_KEY}"
       encrypt_verify_incoming = true
       encrypt_verify_outgoing = true
+
+      # RPC TLS
+      tls {
+        defaults {
+          ca_file         = "/consul/certs/consul-agent-ca.pem"
+          verify_outgoing = true
+        }
+        internal_rpc {
+          verify_server_hostname = true
+        }
+      }
+
+      auto_encrypt {
+        tls = true
+      }
 
       connect { enabled = true }
       ports { grpc = 8502 }
