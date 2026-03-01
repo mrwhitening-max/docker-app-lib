@@ -89,8 +89,8 @@ configs:
       server        = false
       log_level     = "${CONSUL_LOG_LEVEL:-INFO}"
       client_addr   = "0.0.0.0"
-      bind_addr      = "{{ GetAllInterfaces | include \"name\" \"eth0\" | include \"type\" \"IPv4\" | attr \"address\" }}"
-      advertise_addr = "{{ GetAllInterfaces | include \"name\" \"eth0\" | include \"type\" \"IPv4\" | attr \"address\" }}"
+      bind_addr      = "{{ GetPrivateInterfaces | exclude \"name\" \"docker0\" | attr \"address\" }}"
+      advertise_addr = "{{ GetPrivateInterfaces | exclude \"name\" \"docker0\" | attr \"address\" }}"
 
       # Gossip Encryption
       encrypt                 = "${CONSUL_GOSSIP_KEY}"
