@@ -16,15 +16,13 @@ services:
         target: /consul/config/consul.hcl
       - source: prometheus_service
         target: /consul/config/prometheus-service.hcl
-    entrypoint: >
+    entrypoint: |
       sh -c '
         echo "Preparing certs..."
         mkdir -p /consul/certs
         echo "$$CONSUL_CA_CERT_B64" | base64 -d > /consul/certs/consul-agent-ca.pem
         echo "Certs ready."
-        exec consul agent
-          -config-file=/consul/config/consul.hcl
-          -retry-join=${CONSUL_SERVER_IP}
+        exec consul agent -config-file=/consul/config/consul.hcl -retry-join=${CONSUL_SERVER_IP}
       '
 
   envoy-sidecar:
