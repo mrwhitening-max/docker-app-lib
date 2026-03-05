@@ -23,8 +23,8 @@ services:
         mkdir -p /consul/certs
         echo "$$CONSUL_CA_CERT_B64"     | base64 -d > /consul/certs/consul-agent-ca.pem
         echo "$$CONSUL_CA_KEY_B64"      | base64 -d > /consul/certs/consul-agent-ca-key.pem
-        echo "$$CONSUL_SERVER_CERT_B64" | base64 -d > /consul/certs/$$CONSUL_DATACENTER-server-consul-0.pem
-        echo "$$CONSUL_SERVER_KEY_B64"  | base64 -d > /consul/certs/$$CONSUL_DATACENTER-server-consul-0-key.pem
+        echo "$$CONSUL_SERVER_CERT_B64" | base64 -d > /consul/certs/homelab-server-consul-0.pem
+        echo "$$CONSUL_SERVER_KEY_B64"  | base64 -d > /consul/certs/homelab-server-consul-0-key.pem
         echo "Certs ready."
         exec consul agent -config-file=/consul/config/consul-server.hcl
       '
