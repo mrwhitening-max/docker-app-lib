@@ -18,6 +18,14 @@ services:
     configs:
       - source: consul_server_config
         target: /consul/config/consul-server.hcl
+      - source: consul_service_defaults_reactive_resume
+        target: /consul/config/service-defaults-reactive-resume.hcl
+      - source: consul_service_defaults_n8n
+        target: /consul/config/service-defaults-n8n.hcl
+      - source: consul_service_resolver_reactive_resume
+        target: /consul/config/service-resolver-reactive-resume.hcl
+      - source: consul_service_intentions
+        target: /consul/config/service-intentions.hcl
     entrypoint: >
       sh -c '
         echo "Preparing certs..."
@@ -27,84 +35,8 @@ services:
         echo "$$CONSUL_SERVER_CERT_B64" | base64 -d > /consul/certs/$$CONSUL_DATACENTER-server-consul-0.pem
         echo "$$CONSUL_SERVER_KEY_B64"  | base64 -d > /consul/certs/$$CONSUL_DATACENTER-server-consul-0-key.pem
         echo "Certs ready."
-        exec consul agent -config-file=/consul/config/consul-server.hcl
+        exec consul agent -config-dir=/consul/config/
       '
-
-  consul-init:
-    image: curlimages/curl:latest
-    container_name: consul-init
-    restart: on-failure
-    network_mode: host
-    command: |
-      sh -c '
-        echo "=== Consul Day-0 Init ==="
-        echo "Waiting for Consul Server..."
-        until curl -sf http://localhost:8500/v1/status/leader | grep -q ":8300"; do
-          sleep 2
-        done
-        echo "Consul ready."
-        echo "Setting service-defaults: reactive-resume..."
-        curl -s -X PUT http://localhost:8500/v1/config \
-          -H "Content-Type: application/json" \
-          -d "{
-            \"Kind\": \"service-defaults\",
-            \"Name\": \"reactive-resume\",
-            \"Protocol\": \"http\"
-          }"
-        echo "Setting service-defaults: n8n..."
-        curl -s -X PUT http://localhost:8500/v1/config \
-          -H "Content-Type: application/json" \
-          -d "{
-            \"Kind\": \"service-defaults\",
-            \"Name\": \"n8n\",
-            \"Protocol\": \"http\",
-            \"UpstreamConfig\": {
-              \"Overrides\": [
-                {
-                  \"Name\": \"reactive-resume\",
-                  \"PassiveHealthCheck\": {
-                    \"Interval\": \"10s\",
-                    \"MaxFailures\": 3,
-                    \"EnforcingConsecutive5xx\": 100
-                  }
-                }
-              ]
-            }
-          }"
-        echo "Setting service-resolver: reactive-resume..."
-        curl -s -X PUT http://localhost:8500/v1/config \
-          -H "Content-Type: application/json" \
-          -d "{
-            \"Kind\": \"service-resolver\",
-            \"Name\": \"reactive-resume\",
-            \"ConnectTimeout\": \"5s\"
-          }"
-        echo "Setting intention: allow n8n -> reactive-resume..."
-        curl -s -X POST http://localhost:8500/v1/connect/intentions \
-          -H "Content-Type: application/json" \
-          -d "{
-            \"SourceNS\": \"default\",
-            \"SourceName\": \"n8n\",
-            \"DestinationNS\": \"default\",
-            \"DestinationName\": \"reactive-resume\",
-            \"Action\": \"allow\",
-            \"Description\": \"n8n darf reactive-resume erreichen\"
-          }"
-        echo "Setting intention: deny all..."
-        curl -s -X POST http://localhost:8500/v1/connect/intentions \
-          -H "Content-Type: application/json" \
-          -d "{
-            \"SourceNS\": \"default\",
-            \"SourceName\": \"*\",
-            \"DestinationNS\": \"default\",
-            \"DestinationName\": \"*\",
-            \"Action\": \"deny\",
-            \"Description\": \"Default deny all\"
-          }"
-        echo "=== Day-0 Init complete ==="
-      '
-    depends_on:
-      - consul-server
 
 volumes:
   consul-data:
@@ -121,12 +53,10 @@ configs:
       advertise_addr = "${CONSUL_ADVERTISE_IP}"
       client_addr    = "0.0.0.0"
 
-      # Gossip Encryption
       encrypt                 = "${CONSUL_GOSSIP_KEY}"
       encrypt_verify_incoming = true
       encrypt_verify_outgoing = true
 
-      # RPC TLS
       tls {
         defaults {
           ca_file   = "/consul/certs/consul-agent-ca.pem"
@@ -150,13 +80,63 @@ configs:
           leaf_cert_ttl = "24h"
         }
       }
+
       ports {
         grpc     = 8502
         grpc_tls = 8503
       }
+
       ui_config {
         enabled = true
       }
+
       performance {
         raft_multiplier = 1
       }
+
+  consul_service_defaults_reactive_resume:
+    content: |
+      Kind     = "service-defaults"
+      Name     = "reactive-resume"
+      Protocol = "http"
+
+  consul_service_defaults_n8n:
+    content: |
+      Kind     = "service-defaults"
+      Name     = "n8n"
+      Protocol = "http"
+      UpstreamConfig {
+        Overrides = [
+          {
+            Name = "reactive-resume"
+            PassiveHealthCheck {
+              Interval                = "10s"
+              MaxFailures             = 3
+              EnforcingConsecutive5xx = 100
+            }
+          }
+        ]
+      }
+
+  consul_service_resolver_reactive_resume:
+    content: |
+      Kind           = "service-resolver"
+      Name           = "reactive-resume"
+      ConnectTimeout = "5s"
+
+  consul_service_intentions:
+    content: |
+      Kind = "service-intentions"
+      Name = "reactive-resume"
+      Sources = [
+        {
+          Name        = "n8n"
+          Action      = "allow"
+          Description = "n8n darf reactive-resume erreichen"
+        },
+        {
+          Name        = "*"
+          Action      = "deny"
+          Description = "Default deny all"
+        }
+      ]
