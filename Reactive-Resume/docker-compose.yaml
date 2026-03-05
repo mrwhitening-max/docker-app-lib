@@ -14,6 +14,8 @@ services:
     network_mode: host
     volumes:
       - consul_data:/consul/data
+    environment:
+      - CONSUL_CA_CERT_B64=${CONSUL_CA_CERT_B64}
     configs:
       - source: consul_config
         target: /consul/config/consul.hcl
@@ -21,10 +23,14 @@ services:
         target: /consul/config/reactive-resume-service.hcl
       - source: postgres_service
         target: /consul/config/postgres-service.hcl
-    command: >
-      agent
-      -config-file=/consul/config/consul.hcl
-      -retry-join=${CONSUL_SERVER_IP}
+    entrypoint: |
+      sh -c '
+        echo "Preparing certs..."
+        mkdir -p /consul/certs
+        echo "$$CONSUL_CA_CERT_B64" | base64 -d > /consul/certs/consul-agent-ca.pem
+        echo "Certs ready."
+        exec consul agent -config-dir=/consul/config/ -retry-join=${CONSUL_SERVER_IP}
+      '
 
   envoy-sidecar:
     image: debian:bookworm-slim
@@ -195,13 +201,31 @@ configs:
       advertise_addr = "{{ GetInterfaceIP \"eth0\" }}"
       rejoin_after_leave = true
 
-      # Gossip Encryption
       encrypt                 = "${CONSUL_GOSSIP_KEY}"
       encrypt_verify_incoming = true
       encrypt_verify_outgoing = true
 
+      tls {
+        defaults {
+          ca_file         = "/consul/certs/consul-agent-ca.pem"
+          verify_outgoing = true
+        }
+        internal_rpc {
+          verify_server_hostname = true
+        }
+      }
+
+      auto_encrypt {
+        tls = true
+      }
+
       connect { enabled = true }
       ports { grpc = 8502 }
+
+      telemetry {
+        prometheus_retention_time = "30s"
+        disable_hostname          = false
+      }
 
   reactive_resume_service:
     content: |
