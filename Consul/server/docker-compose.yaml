@@ -75,11 +75,6 @@ configs:
           verify_server_hostname = true
         }
       }
-
-      telemetry {
-        prometheus_retention_time = "30s"
-        disable_hostname          = false
-      }
       
       auto_encrypt {
         allow_tls = true
@@ -104,6 +99,12 @@ configs:
       performance {
         raft_multiplier = 1
       }
+      
+      telemetry {
+        prometheus_retention_time = "30s"
+        disable_hostname          = false
+      }
+      
 
   consul_service_defaults_reactive_resume:
     content: |
