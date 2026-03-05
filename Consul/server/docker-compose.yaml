@@ -142,35 +142,37 @@ configs:
         ]
       }
 
-  consul_service_intentions:
+  consul_service_intentions_consul:
     content: |
       config_entries {
         bootstrap = [
           {
             Kind = "service-intentions"
-            Name = "reactive-resume"
+            Name = "consul"
             Sources = [
               {
-                Name        = "n8n"
+                Name        = "prometheus"
                 Action      = "allow"
-                Description = "n8n darf reactive-resume erreichen"
+                Description = "Prometheus darf Consul Metrics scrapen"
               },
               {
-                Kind = "service-intentions"
-                Name = "consul"
-                Sources = [
-                  {
-                    Name        = "prometheus"
-                    Action      = "allow"
-                    Description = "Prometheus darf Consul Metrics scrapen"
-                  },
-                  {
-                    Name        = "*"
-                    Action      = "deny"
-                    Description = "Default deny all"
-                  }
-                ]
-              },
+                Name        = "*"
+                Action      = "deny"
+                Description = "Default deny all"
+              }
+            ]
+          }
+        ]
+      }
+
+  consul_service_intentions_prometheus:
+    content: |
+      config_entries {
+        bootstrap = [
+          {
+            Kind = "service-intentions"
+            Name = "prometheus"
+            Sources = [
               {
                 Name        = "*"
                 Action      = "deny"
