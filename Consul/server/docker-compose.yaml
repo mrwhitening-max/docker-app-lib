@@ -26,7 +26,7 @@ services:
         target: /consul/config/service-defaults-prometheus.hcl
       - source: consul_service_resolver_reactive_resume
         target: /consul/config/service-resolver-reactive-resume.hcl
-      - source: consul_service_intentions_reactive_resume  # ← FEHLT!
+      - source: consul_service_intentions_reactive_resume
         target: /consul/config/service-intentions-reactive-resume.hcl
       - source: consul_service_intentions_consul
         target: /consul/config/service-intentions-consul.hcl
