@@ -32,6 +32,8 @@ services:
         target: /consul/config/service-intentions-consul.hcl
       - source: consul_service_intentions_prometheus
         target: /consul/config/service-intentions-prometheus.hcl
+      - source: consul_config_v2        # ← Version hochzählen bei Änderungen
+        target: /consul/config/consul.hcl
     entrypoint: >
       sh -c '
         echo "Preparing certs..."
@@ -105,6 +107,65 @@ configs:
         disable_hostname          = false
       }
       
+
+
+  consul_server_config_v2:
+    content: |
+      datacenter = "${CONSUL_DATACENTER}"
+      data_dir   = "/consul/data"
+      log_level  = "${CONSUL_LOG_LEVEL}"
+      server     = true
+      bootstrap_expect = 1
+      bind_addr      = "${CONSUL_BIND_IP}"
+      advertise_addr = "${CONSUL_ADVERTISE_IP}"
+      client_addr    = "0.0.0.0"
+
+      encrypt                 = "${CONSUL_GOSSIP_KEY}"
+      encrypt_verify_incoming = true
+      encrypt_verify_outgoing = true
+
+      tls {
+        defaults {
+          ca_file   = "/consul/certs/consul-agent-ca.pem"
+          cert_file = "/consul/certs/${CONSUL_DATACENTER}-server-consul-0.pem"
+          key_file  = "/consul/certs/${CONSUL_DATACENTER}-server-consul-0-key.pem"
+          verify_incoming = true
+          verify_outgoing = true
+        }
+        internal_rpc {
+          verify_server_hostname = true
+        }
+      }
+
+      auto_encrypt {
+        allow_tls = true
+      }
+
+      connect {
+        enabled = true
+        ca_config {
+          leaf_cert_ttl = "24h"
+        }
+      }
+
+      ports {
+        grpc     = 8502
+        grpc_tls = 8503
+      }
+
+      ui_config {
+        enabled = true
+      }
+
+      performance {
+        raft_multiplier = 1
+      }
+
+      telemetry {
+        prometheus_retention_time = "30s"
+        disable_hostname          = false
+      }
+
 
   consul_service_defaults_reactive_resume:
     content: |
