@@ -33,7 +33,7 @@ services:
       - source: consul_service_intentions_prometheus
         target: /consul/config/service-intentions-prometheus.hcl
       - source: consul_server_config_v2
-        target: /consul/config/consul.hcl
+        target: /consul/config/consul-server.hcl
     entrypoint: >
       sh -c '
         echo "Preparing certs..."
