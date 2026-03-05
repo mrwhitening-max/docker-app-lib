@@ -90,12 +90,10 @@ configs:
       bind_addr      = "{{ GetInterfaceIP \"eth0\" }}"
       advertise_addr = "{{ GetInterfaceIP \"eth0\" }}"
 
-      # Gossip Encryption
       encrypt                 = "${CONSUL_GOSSIP_KEY}"
       encrypt_verify_incoming = true
       encrypt_verify_outgoing = true
 
-      # RPC TLS
       tls {
         defaults {
           ca_file         = "/consul/certs/consul-agent-ca.pem"
@@ -112,7 +110,7 @@ configs:
 
       connect { enabled = true }
       ports { grpc = 8502 }
-      
+
       telemetry {
         prometheus_retention_time = "30s"
         disable_hostname          = false
@@ -158,6 +156,8 @@ configs:
             - source_labels: [__meta_consul_service]
               regex: 'consul'
               action: keep
+            - target_label: __address__
+              replacement: 'localhost:8500'
 
         - job_name: 'consul-services'
           consul_sd_configs:
