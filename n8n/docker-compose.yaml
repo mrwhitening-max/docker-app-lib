@@ -93,6 +93,8 @@ services:
       - N8N_PROTOCOL=http
       - N8N_SECURE_COOKIE=false
       - GENERIC_TIMEZONE=Europe/Berlin
+      - N8N_METRICS=true
+      - N8N_METRICS_PREFIX=n8n_
     volumes:
       - /data/n8n/n8n_data:/home/node/.n8n
     depends_on:
@@ -146,7 +148,7 @@ configs:
       service {
         name = "n8n"
         port = ${N8N_PORT:-5678}
-        tags = ["automation"]
+        tags = ["automation", "metrics"]
         connect {
           sidecar_service {
             proxy {
