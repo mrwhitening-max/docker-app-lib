@@ -22,10 +22,16 @@ services:
         target: /consul/config/service-defaults-reactive-resume.hcl
       - source: consul_service_defaults_n8n
         target: /consul/config/service-defaults-n8n.hcl
+      - source: consul_service_defaults_prometheus
+        target: /consul/config/service-defaults-prometheus.hcl
       - source: consul_service_resolver_reactive_resume
         target: /consul/config/service-resolver-reactive-resume.hcl
-      - source: consul_service_intentions
-        target: /consul/config/service-intentions.hcl
+      - source: consul_service_intentions_reactive_resume  # ← FEHLT!
+        target: /consul/config/service-intentions-reactive-resume.hcl
+      - source: consul_service_intentions_consul
+        target: /consul/config/service-intentions-consul.hcl
+      - source: consul_service_intentions_prometheus
+        target: /consul/config/service-intentions-prometheus.hcl
     entrypoint: >
       sh -c '
         echo "Preparing certs..."
@@ -173,6 +179,29 @@ configs:
             Kind = "service-intentions"
             Name = "prometheus"
             Sources = [
+              {
+                Name        = "*"
+                Action      = "deny"
+                Description = "Default deny all"
+              }
+            ]
+          }
+        ]
+      }
+
+  consul_service_intentions_reactive_resume:
+    content: |
+      config_entries {
+        bootstrap = [
+          {
+            Kind = "service-intentions"
+            Name = "reactive-resume"
+            Sources = [
+              {
+                Name        = "n8n"
+                Action      = "allow"
+                Description = "n8n darf reactive-resume erreichen"
+              },
               {
                 Name        = "*"
                 Action      = "deny"
