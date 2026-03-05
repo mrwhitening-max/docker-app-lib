@@ -32,8 +32,6 @@ services:
         target: /consul/config/service-intentions-consul.hcl
       - source: consul_service_intentions_prometheus
         target: /consul/config/service-intentions-prometheus.hcl
-      - source: consul_server_config_v2
-        target: /consul/config/consul-server.hcl
     entrypoint: >
       sh -c '
         echo "Preparing certs..."
@@ -50,7 +48,7 @@ volumes:
   consul-data:
 
 configs:
-  consul_server_config_v2:
+  consul_server_config:
     content: |
       datacenter = "${CONSUL_DATACENTER}"
       data_dir   = "/consul/data"
