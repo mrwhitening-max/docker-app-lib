@@ -106,49 +106,49 @@ configs:
         ]
       }
 
-    consul_service_defaults_n8n:
-      content: |
-        config_entries {
-          bootstrap = [
-            {
-              Kind     = "service-defaults"
-              Name     = "n8n"
-              Protocol = "http"
-            }
-          ]
-        }
+  consul_service_defaults_n8n:
+    content: |
+      config_entries {
+        bootstrap = [
+          {
+            Kind     = "service-defaults"
+            Name     = "n8n"
+            Protocol = "http"
+          }
+        ]
+      }
 
-    consul_service_resolver_reactive_resume:
-      content: |
-        config_entries {
-          bootstrap = [
-            {
-              Kind           = "service-resolver"
-              Name           = "reactive-resume"
-              ConnectTimeout = "5s"
-            }
-          ]
-        }
+  consul_service_resolver_reactive_resume:
+    content: |
+      config_entries {
+        bootstrap = [
+          {
+            Kind           = "service-resolver"
+            Name           = "reactive-resume"
+            ConnectTimeout = "5s"
+          }
+        ]
+      }
 
-    consul_service_intentions:
-      content: |
-        config_entries {
-          bootstrap = [
-            {
-              Kind = "service-intentions"
-              Name = "reactive-resume"
-              Sources = [
-                {
-                  Name        = "n8n"
-                  Action      = "allow"
-                  Description = "n8n darf reactive-resume erreichen"
-                },
-                {
-                  Name        = "*"
-                  Action      = "deny"
-                  Description = "Default deny all"
-                }
-              ]
-            }
-          ]
-        }
+  consul_service_intentions:
+    content: |
+      config_entries {
+        bootstrap = [
+          {
+            Kind = "service-intentions"
+            Name = "reactive-resume"
+            Sources = [
+              {
+                Name        = "n8n"
+                Action      = "allow"
+                Description = "n8n darf reactive-resume erreichen"
+              },
+              {
+                Name        = "*"
+                Action      = "deny"
+                Description = "Default deny all"
+              }
+            ]
+          }
+        ]
+      }
