@@ -22,6 +22,8 @@ services:
         target: /consul/config/service-defaults-reactive-resume.hcl
       - source: consul_service_defaults_n8n
         target: /consul/config/service-defaults-n8n.hcl
+      - source: consul_service_resolver_n8n
+        target: /consul/config/service-resolver-n8n.hcl
       - source: consul_service_defaults_prometheus
         target: /consul/config/service-defaults-prometheus.hcl
       - source: consul_service_resolver_reactive_resume
@@ -127,6 +129,27 @@ configs:
             Kind     = "service-defaults"
             Name     = "n8n"
             Protocol = "http"
+            UpstreamConfig {
+              Defaults {
+                PassiveHealthCheck {
+                  Interval                = "10s"
+                  MaxFailures             = 3
+                  EnforcingConsecutive5xx = 100
+                }
+              }
+            }
+          }
+        ]
+      }
+
+  consul_service_resolver_n8n:
+    content: |
+      config_entries {
+        bootstrap = [
+          {
+            Kind           = "service-resolver"
+            Name           = "n8n"
+            ConnectTimeout = "5s"
           }
         ]
       }
