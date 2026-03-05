@@ -118,6 +118,18 @@ configs:
         ]
       }
 
+  consul_service_defaults_prometheus:
+    content: |
+      config_entries {
+        bootstrap = [
+          {
+            Kind     = "service-defaults"
+            Name     = "prometheus"
+            Protocol = "http"
+          }
+        ]
+      }
+
   consul_service_resolver_reactive_resume:
     content: |
       config_entries {
@@ -142,6 +154,22 @@ configs:
                 Name        = "n8n"
                 Action      = "allow"
                 Description = "n8n darf reactive-resume erreichen"
+              },
+              {
+                Kind = "service-intentions"
+                Name = "consul"
+                Sources = [
+                  {
+                    Name        = "prometheus"
+                    Action      = "allow"
+                    Description = "Prometheus darf Consul Metrics scrapen"
+                  },
+                  {
+                    Name        = "*"
+                    Action      = "deny"
+                    Description = "Default deny all"
+                  }
+                ]
               },
               {
                 Name        = "*"
