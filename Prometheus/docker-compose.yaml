@@ -170,3 +170,10 @@ configs:
             - source_labels: [__meta_consul_tags]
               regex: '.*,metrics,.*'
               action: keep
+      
+        - job_name: 'homeassistant'
+            scrape_interval: 60s
+            bearer_token: '${HA_BEARER_TOKEN}'
+            metrics_path: /api/prometheus
+            static_configs:
+              - targets: ['${HA_HOST}:8123']
