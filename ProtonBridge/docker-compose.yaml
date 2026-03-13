@@ -3,6 +3,8 @@ services:
     image: ganeshlab/protonmail-bridge:latest
     container_name: protonmail-bridge
     restart: unless-stopped
+    environment:
+      - BRIDGE_EXTRA_ARGS=--no-auto-update
     ports:
       - "127.0.0.1:1143:1143/tcp"
       - "127.0.0.1:1025:1025/tcp"
