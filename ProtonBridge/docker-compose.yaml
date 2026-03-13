@@ -4,7 +4,7 @@ services:
     container_name: protonmail-bridge
     restart: unless-stopped
     ports:
-      - "0.0.0.0:1143:1143/tcp"
-      - "0.0.0.0:1025:1025/tcp"
+      - "0.0.0.0:1143:143/tcp"
+      - "0.0.0.0:1025:25/tcp"
     volumes:
       - /data/protonmail-data:/root
