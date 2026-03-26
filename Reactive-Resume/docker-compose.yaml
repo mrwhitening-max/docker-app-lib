@@ -149,7 +149,7 @@ services:
   # ============================================
 
   reactive_resume:
-    image: amruthpillai/reactive-resume:v5.0.9
+    image: amruthpillai/reactive-resume:v5.0.14
     container_name: reactive-resume-app
     restart: unless-stopped
     network_mode: host
