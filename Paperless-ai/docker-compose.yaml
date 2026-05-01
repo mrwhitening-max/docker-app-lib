@@ -11,10 +11,16 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
-      - EXTERNAL_API_TIMEOUT=${EXTERNAL_API_TIMEOUT:-90000}
       - PAPERLESS_AI_PORT=${PAPERLESS_AI_PORT:-3000}
       - RAG_SERVICE_URL=http://localhost:8000
       - RAG_SERVICE_ENABLED=true
+    entrypoint: >
+      /bin/sh -c "
+      echo 'Infiltriere config.js...' &&
+      sed -i \"s/5000/120000/g\" /app/config/config.js &&
+      echo 'Mojo geladen! Starte Dienste...' &&
+      /app/start-services.sh
+      "
     ports:
       - "3000:${PAPERLESS_AI_PORT:-3000}"
     volumes:
