@@ -11,6 +11,7 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
+      - EXTERNAL_API_TIMEOUT=${EXTERNAL_API_TIMEOUT:-90000}
       - PAPERLESS_AI_PORT=${PAPERLESS_AI_PORT:-3000}
       - RAG_SERVICE_URL=http://localhost:8000
       - RAG_SERVICE_ENABLED=true
