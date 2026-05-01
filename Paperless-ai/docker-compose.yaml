@@ -16,9 +16,9 @@ services:
       - RAG_SERVICE_ENABLED=true
     entrypoint: >
       /bin/sh -c "
-      echo 'Infiltriere config.js...' &&
-      sed -i \"s/5000/120000/g\" /app/config/config.js &&
-      echo 'Mojo geladen! Starte Dienste...' &&
+      echo 'Infiltriere OllamaService...' &&
+      sed -i 's/num_predict: 256/num_predict: 1024/g' /app/services/ollamaService.js &&
+      echo 'Operation erfolgreich! Starte Dienste...' &&
       /app/start-services.sh
       "
     ports:
