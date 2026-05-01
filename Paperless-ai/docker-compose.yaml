@@ -14,16 +14,7 @@ services:
       - PAPERLESS_AI_PORT=${PAPERLESS_AI_PORT:-3000}
       - RAG_SERVICE_URL=http://localhost:8000
       - RAG_SERVICE_ENABLED=true
-    entrypoint: >
-      /bin/sh -c "
-      echo 'Infiltriere System...' &&
-      # Tausche das Wort schema gegen 'json' (mit Anführungszeichen)
-      sed -i 's/format: schema/format: \"json\"/g' /app/services/ollamaService.js &&
-      # Erhöhe das Limit von 256 auf 1024
-      sed -i 's/num_predict: 256/num_predict: 1024/g' /app/services/ollamaService.js &&
-      echo 'Dienste werden gestartet, Baby!' &&
-      /app/start-services.sh
-      "
+    entrypoint: /bin/sh -c "sed -i 's/format: schema/format: \"json\"/g' /app/services/ollamaService.js && sed -i 's/num_predict: 256/num_predict: 1024/g' /app/services/ollamaService.js && /app/start-services.sh"
     ports:
       - "3000:${PAPERLESS_AI_PORT:-3000}"
     volumes:
