@@ -16,9 +16,12 @@ services:
       - RAG_SERVICE_ENABLED=true
     entrypoint: >
       /bin/sh -c "
-      echo 'Infiltriere OllamaService...' &&
+      echo 'Infiltriere System...' &&
+      # Tausche das Wort schema gegen 'json' (mit Anführungszeichen)
+      sed -i 's/format: schema/format: \"json\"/g' /app/services/ollamaService.js &&
+      # Erhöhe das Limit von 256 auf 1024
       sed -i 's/num_predict: 256/num_predict: 1024/g' /app/services/ollamaService.js &&
-      echo 'Operation erfolgreich! Starte Dienste...' &&
+      echo 'Dienste werden gestartet, Baby!' &&
       /app/start-services.sh
       "
     ports:
