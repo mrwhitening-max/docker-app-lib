@@ -16,9 +16,9 @@ services:
       - RAG_SERVICE_ENABLED=true
     entrypoint:                                                                                           
     - /bin/sh     
-    - -c
+    - -c                                                                                                
     - |
-      sed -i 's/num_predict: 1024/num_predict: 4096/g' /app/services/ollamaService.js
+      sed -i 's/num_predict: 1024/num_predict: 8192/g' /app/services/ollamaService.js                   
       exec /app/start-services.sh  
     ports:
       - "3000:${PAPERLESS_AI_PORT:-3000}"
