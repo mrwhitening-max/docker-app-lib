@@ -14,12 +14,13 @@ services:
       - PAPERLESS_AI_PORT=${PAPERLESS_AI_PORT:-3000}
       - RAG_SERVICE_URL=http://localhost:8000
       - RAG_SERVICE_ENABLED=true
-    entrypoint:                                                                                           
-    - /bin/sh     
-    - -c                                                                                                
-    - |
-      sed -i 's/num_predict: 1024/num_predict: 8192/g' /app/services/ollamaService.js                   
-      exec /app/start-services.sh  
+    entrypoint:
+    - /bin/sh                                                                                           
+    - -c
+    - |                                                                                                 
+      sed -i 's/_calculateNumCtx(promptTokenCount, 1024)/_calculateNumCtx(promptTokenCount, 8192)/g' 
+  /app/services/ollamaService.js                                                                        
+      exec /app/start-services.sh
     ports:
       - "3000:${PAPERLESS_AI_PORT:-3000}"
     volumes:
