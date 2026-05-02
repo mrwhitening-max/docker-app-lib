@@ -18,8 +18,7 @@ services:
     - /bin/sh                                                                                           
     - -c
     - |                                                                                                 
-      sed -i 's/_calculateNumCtx(promptTokenCount, 1024)/_calculateNumCtx(promptTokenCount, 8192)/g' 
-  /app/services/ollamaService.js                                                                        
+      sed -i 's/_calculateNumCtx(promptTokenCount, 1024)/_calculateNumCtx(promptTokenCount, 8192)/g' /app/services/ollamaService.js                                                                        
       exec /app/start-services.sh
     ports:
       - "3000:${PAPERLESS_AI_PORT:-3000}"
