@@ -23,6 +23,14 @@ services:
       - UI_PASSWORD=${UI_PASSWORD}
       - REDIS_HOST=${LITELLM_REDIS_HOST:-litellm_redis}
       - REDIS_PORT=${LITELLM_REDIS_PORT:-6379}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OLLAMA_API_BASE=${OLLAMA_API_BASE}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_API_KEY2=${GEMINI_API_KEY2}
+      - GEMINI_API_KEY3=${GEMINI_API_KEY3}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_API_KEY2=${OPENROUTER_API_KEY2}
+      - OPENROUTER_API_KEY3=${OPENROUTER_API_KEY3}
     env_file:
       - .env
     depends_on:
@@ -63,6 +71,26 @@ configs:
   litellm_config:
     content: |
       model_list:
+        # OLLAMA (remote)
+        - model_name: ollama/*
+          litellm_params:
+            model: ollama/*
+            api_base: os.environ/OLLAMA_API_BASE
+
+        # ANTHROPIC CLAUDE
+        - model_name: claude/*
+          litellm_params:
+            model: anthropic/claude-opus-4-7
+            api_key: os.environ/ANTHROPIC_API_KEY
+        - model_name: claude/*
+          litellm_params:
+            model: anthropic/claude-sonnet-4-6
+            api_key: os.environ/ANTHROPIC_API_KEY
+        - model_name: claude/*
+          litellm_params:
+            model: anthropic/claude-haiku-4-5-20251001
+            api_key: os.environ/ANTHROPIC_API_KEY
+
         # GEMINI
         - model_name: gemini/*
           litellm_params:
