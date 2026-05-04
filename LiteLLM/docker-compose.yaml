@@ -11,7 +11,7 @@ services:
     configs:
       - source: litellm_config
         target: /app/config.yaml
-    command: [ "--config", "/app/config.yaml", "--port", "4000", "--num_workers", "8" ]
+    command: [ "--config", "/app/config.yaml", "--port", "4000", "--num_workers", "2" ]
     networks:
       - internal
     environment:
