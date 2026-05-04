@@ -13,7 +13,6 @@ services:
         target: /app/config.yaml
     command: [ "--config", "/app/config.yaml", "--port", "4000", "--num_workers", "8" ]
     networks:
-      - proxy
       - internal
     environment:
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-1234}
@@ -150,6 +149,4 @@ volumes:
   redis_data:
 
 networks:
-  proxy:
-    external: true
   internal:
