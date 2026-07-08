@@ -101,7 +101,20 @@ services:
       db:
         condition: service_healthy
     user: "0:0"
-
+  
+  browserless:
+    image: ghcr.io/browserless/chrome:1.61-chrome-stable
+    container_name: browserless
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PORT=${BROWSERLESS_PORT:-3000}
+      - MAX_CONCURRENT_SESSIONS=2
+      - CONNECTION_TIMEOUT=60000
+      - PREBOOT_CHROME=true
+      - DEFAULT_BLOCK_ADS=false
+    shm_size: 1gb
+    
 volumes:
   consul-data:
   envoy-bin:
