@@ -103,16 +103,15 @@ services:
     user: "0:0"
   
   browserless:
-    image: ghcr.io/browserless/chrome:latest
+    image: ghcr.io/browserless/chromium
     container_name: browserless
     restart: unless-stopped
     network_mode: host
     environment:
-      - PORT=${BROWSERLESS_PORT:-3000}
-      - MAX_CONCURRENT_SESSIONS=2
-      - CONNECTION_TIMEOUT=60000
-      - PREBOOT_CHROME=true
-      - DEFAULT_BLOCK_ADS=false
+      - TOKEN=${BROWSERLESS_TOKEN}
+      - PORT=3000
+      - CONCURRENT=2
+      - TIMEOUT=60000
     shm_size: 1gb
     
 volumes:
