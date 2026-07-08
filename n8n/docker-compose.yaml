@@ -113,6 +113,14 @@ services:
       - CONCURRENT=2
       - TIMEOUT=60000
     shm_size: 1gb
+
+  tesseract:
+    image: hertzg/tesseract-server:latest
+    container_name: tesseract
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PORT=8884
     
 volumes:
   consul-data:
