@@ -123,6 +123,7 @@ configs:
 
       general_settings:
         forward_openai_org_id: true
+        store_prompts_in_spend_logs: true
 
       litellm_settings:
         enable_json_schema_validation: True
