@@ -124,6 +124,8 @@ configs:
       general_settings:
         forward_openai_org_id: true
         store_prompts_in_spend_logs: true
+        maximum_spend_logs_retention_period: "7d"
+        maximum_spend_logs_retention_interval: "1d"
 
       litellm_settings:
         enable_json_schema_validation: True
