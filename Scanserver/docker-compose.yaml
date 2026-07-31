@@ -8,7 +8,7 @@ services:
       DEVICE_ID: "${DEVICE_ID}"
       PAPERLESS: "${PAPERLESS_URL}"
       TOKEN: "${PAPERLESS_TOKEN}"
-      EPSON_DEB_URL: "${EPSON_DEB_URL}"
+      EPSON_URL: "${EPSON_URL}"
       RESOLUTION: "${RESOLUTION:-300}"
       JPEG_QUALITY: "${JPEG_QUALITY:-75}"
       COLOR_TYPE: "${COLOR_TYPE:-2}"
@@ -44,21 +44,30 @@ configs:
         log "Installiere Abhaengigkeiten"
         apt-get update -qq >/dev/null 2>&1
         apt-get install -y -qq --no-install-recommends \
-          ca-certificates curl libusb-1.0-0 libjpeg62-turbo libpng16-16 \
-          libtiff6 libxml2 poppler-utils jq >/dev/null 2>&1 \
-          || { log "FEHLER: apt-get fehlgeschlagen"; exit 1; }
-        if [ ! -s "$$CACHE/epsonscan2.deb" ]; then
-          log "Lade Epson-Treiber von $$EPSON_DEB_URL"
-          curl -fsSL -A "Mozilla/5.0" -o "$$CACHE/epsonscan2.deb" "$$EPSON_DEB_URL" \
-            || { log "FEHLER: Download fehlgeschlagen — .deb manuell nach ./cache/epsonscan2.deb legen"; exit 1; }
+          ca-certificates curl tar libusb-1.0-0 libjpeg62-turbo libpng16-16 \
+          libtiff6 libxml2 libqt5widgets5 libqt5gui5 libqt5core5a \
+          poppler-utils jq avahi-utils libavahi-client3 \
+          >/dev/null 2>&1 || { log "FEHLER: apt-get fehlgeschlagen"; exit 1; }
+
+        if [ ! -s "$$CACHE/epson.tar.gz" ]; then
+          log "Lade Epson-Bundle von $$EPSON_URL"
+          curl -fsSL -A "Mozilla/5.0" -o "$$CACHE/epson.tar.gz" "$$EPSON_URL" \
+            || { log "FEHLER: Download fehlgeschlagen — Bundle manuell nach ./cache/epson.tar.gz legen"; exit 1; }
         else
-          log "Nutze zwischengespeichertes Paket"
+          log "Nutze zwischengespeichertes Bundle"
         fi
-        dpkg -i "$$CACHE/epsonscan2.deb" >/dev/null 2>&1 \
-          || apt-get -f install -y -qq >/dev/null 2>&1
+
+        log "Entpacke Bundle"
+        rm -rf /tmp/epson && mkdir -p /tmp/epson
+        tar xzf "$$CACHE/epson.tar.gz" -C /tmp/epson --strip-components=1 \
+          || { log "FEHLER: Entpacken gescheitert"; exit 1; }
+
+        log "Starte install.sh"
+        ( cd /tmp/epson && ./install.sh 2>&1 ) | tail -20 | while read -r z; do log "  $$z"; done
+
         command -v epsonscan2 >/dev/null 2>&1 \
-          || { log "FEHLER: epsonscan2 nicht installierbar"; exit 1; }
-        log "Treiber installiert"
+          || { log "FEHLER: epsonscan2 nach Installation nicht vorhanden"; exit 1; }
+        log "Treiber installiert: $$(epsonscan2 --help 2>&1 | head -1)"
       fi
 
       # ---------- Profile erzeugen ----------
@@ -90,13 +99,16 @@ configs:
       }
 
       [ -f "$$COUNTER" ] || echo 0 > "$$COUNTER"
-
       MODUS="$${1:-duplex}"
 
       if [ "$$MODUS" = "setup" ] || [ ! -f "$$PROFDIR/duplex.SF2" ]; then
         epsonscan2 -i "$$SCANNER_IP" >/dev/null 2>&1
         setup_profiles || exit 1
-        [ "$$MODUS" = "setup" ] && { log "Einrichtung abgeschlossen"; exit 0; }
+        if [ "$$MODUS" = "setup" ]; then
+          log "Geraeteliste: $$(epsonscan2 --list 2>&1)"
+          log "Einrichtung abgeschlossen"
+          exit 0
+        fi
       fi
 
       case "$$MODUS" in
@@ -133,7 +145,7 @@ configs:
 
       NEUEST=$$(find "$$OUTDIR" /root /tmp -maxdepth 2 -name '*.pdf' \
         -newermt '-5 minutes' 2>/dev/null | head -1)
-      [ -n "$$NEUEST" ] || { log "FEHLER: keine frische PDF gefunden"; exit 1; }
+      [ -n "$$NEUEST" ] || { log "FEHLER: keine frische PDF erzeugt — Abbruch"; exit 1; }
       mv "$$NEUEST" "$$OUTDIR/$$NAME"
       SEITEN=$$(pdfinfo "$$OUTDIR/$$NAME" 2>/dev/null | awk '/^Pages/{print $$2}')
       log "Datei $$NAME: $$(stat -c %s "$$OUTDIR/$$NAME") Bytes, $${SEITEN:-?} Seiten"
