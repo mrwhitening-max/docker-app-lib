@@ -1,0 +1,145 @@
+
+services:
+  scanner:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM debian:12-slim
+        RUN apt-get update && apt-get install -y --no-install-recommends \
+              ca-certificates curl libusb-1.0-0 libjpeg62-turbo libpng16-16 \
+              libtiff6 libxml2 poppler-utils avahi-utils jq \
+            && rm -rf /var/lib/apt/lists/*
+        COPY epsonscan2.deb /tmp/epsonscan2.deb
+        RUN (dpkg -i /tmp/epsonscan2.deb || (apt-get update && apt-get -f install -y)) \
+            && rm -f /tmp/epsonscan2.deb && rm -rf /var/lib/apt/lists/*
+        WORKDIR /scan
+        ENTRYPOINT ["/usr/local/bin/scan.sh"]
+    container_name: scanner
+    network_mode: host
+    environment:
+      SCANNER_IP: "${SCANNER_IP}"
+      DEVICE_ID: "${DEVICE_ID}"
+      PAPERLESS: "${PAPERLESS_URL}"
+      TOKEN: "${PAPERLESS_TOKEN}"
+      WAIT_LOOPS: "${WAIT_LOOPS:-60}"
+      WAIT_SECONDS: "${WAIT_SECONDS:-10}"
+    configs:
+      - source: scan_script
+        target: /usr/local/bin/scan.sh
+        mode: 0755
+    volumes:
+      - ./profiles:/scan/profiles:ro
+      - ./out:/scan/out
+      - ./log:/scan/log
+    restart: "no"
+
+configs:
+  scan_script:
+    content: |
+      #!/bin/bash
+      set -uo pipefail
+
+      MODUS="$${1:-duplex}"
+      SF2="/scan/profiles/$${MODUS}.SF2"
+      OUTDIR="/scan/out"
+      LOG="/scan/log/scan.log"
+      COUNTER="$$OUTDIR/.counter"
+
+      log() { echo "$$(date '+%F %T') $$*" | tee -a "$$LOG"; }
+
+      mkdir -p "$$OUTDIR" /scan/log
+      [ -f "$$COUNTER" ] || echo 0 > "$$COUNTER"
+
+      case "$$MODUS" in
+        duplex|simplex) ;;
+        *) echo "Aufruf: docker compose run --rm scanner [duplex|simplex]"; exit 1 ;;
+      esac
+
+      N=$$(( $$(cat "$$COUNTER") + 1 ))
+      NAME=$$(printf "scan_%05d.pdf" "$$N")
+      log "=== Lauf $$N gestartet (Modus: $$MODUS) ==="
+
+      if [ ! -f "$$SF2" ]; then
+        log "FEHLER: Profil $$SF2 fehlt — Abbruch"
+        exit 1
+      fi
+
+      # --- Vorabpruefung Paperless ---
+      log "Pruefe Verbindung zu $$PAPERLESS"
+      PRE=$$(curl -s -m 10 -o /dev/null -w "%{http_code}" \
+        "$$PAPERLESS/api/documents/" -H "Authorization: Token $$TOKEN")
+      log "Vorabpruefung HTTP-Code: $${PRE:-keine Antwort}"
+      case "$$PRE" in
+        200) log "Paperless erreichbar, Token gueltig" ;;
+        401|403) log "FEHLER: Token ungueltig — Abbruch"; exit 1 ;;
+        000|"") log "FEHLER: Paperless nicht erreichbar — Abbruch"; exit 1 ;;
+        *) log "WARNUNG: unerwarteter Code $$PRE, fahre fort" ;;
+      esac
+
+      # --- Scanner registrieren ---
+      log "Registriere Scanner $$SCANNER_IP"
+      epsonscan2 -i "$$SCANNER_IP" >/dev/null 2>&1
+      GERAETE=$$(epsonscan2 --list 2>&1)
+      log "Geraeteliste: $$GERAETE"
+      if ! echo "$$GERAETE" | grep -q "$$DEVICE_ID"; then
+        log "FEHLER: $$DEVICE_ID nicht gefunden — Abbruch"
+        exit 1
+      fi
+
+      # --- Scannen ---
+      cd "$$OUTDIR"
+      log "Starte Scan mit $$SF2"
+      SCANOUT=$$(echo 1 | epsonscan2 --scan "$$DEVICE_ID" "$$SF2" 2>&1)
+      log "epsonscan2 Ausgabe: $$SCANOUT"
+
+      NEUEST=$$(find "$$OUTDIR" /root /tmp -maxdepth 2 -name '*.pdf' \
+        -newermt '-5 minutes' 2>/dev/null | head -1)
+      if [ -z "$$NEUEST" ]; then
+        log "FEHLER: keine frische PDF gefunden — Abbruch"
+        exit 1
+      fi
+      mv "$$NEUEST" "$$OUTDIR/$$NAME"
+      SEITEN=$$(pdfinfo "$$OUTDIR/$$NAME" 2>/dev/null | awk '/^Pages/{print $$2}')
+      log "Datei: $$NAME ($$(stat -c %s "$$OUTDIR/$$NAME") Bytes, $${SEITEN:-?} Seiten)"
+
+      # --- Hochladen ---
+      log "Lade hoch: $$NAME"
+      ANTWORT=$$(curl -s -m 300 -w '\n%{http_code}' -X POST \
+        "$$PAPERLESS/api/documents/post_document/" \
+        -H "Authorization: Token $$TOKEN" \
+        -F "document=@$$OUTDIR/$$NAME" 2>&1)
+      CODE=$$(echo "$$ANTWORT" | tail -1)
+      BODY=$$(echo "$$ANTWORT" | head -n -1)
+      log "Upload HTTP-Code: $$CODE"
+      log "Upload Antwort: $$BODY"
+
+      if [ "$$CODE" != "200" ]; then
+        log "FEHLER: Upload gescheitert — Datei bleibt unter $$OUTDIR/$$NAME"
+        exit 1
+      fi
+
+      TASK=$$(echo "$$BODY" | tr -d '"')
+      log "Task-ID: $$TASK"
+
+      # --- Verarbeitung verfolgen ---
+      ERFOLG=0
+      for i in $$(seq 1 "$$WAIT_LOOPS"); do
+        sleep "$$WAIT_SECONDS"
+        STATUS=$$(curl -s -m 15 "$$PAPERLESS/api/tasks/?task_id=$$TASK" \
+          -H "Authorization: Token $$TOKEN")
+        LAGE=$$(echo "$$STATUS" | grep -o '"status":"[^"]*"' | head -1)
+        log "Statusabfrage $$i: $${LAGE:-keine Angabe}"
+        case "$$LAGE" in
+          *SUCCESS*) log "Verarbeitung erfolgreich"; ERFOLG=1; break ;;
+          *FAILURE*) log "FEHLER bei Verarbeitung: $$STATUS"; exit 1 ;;
+        esac
+      done
+
+      echo "$$N" > "$$COUNTER"
+      if [ "$$ERFOLG" = "1" ]; then
+        rm -f "$$OUTDIR/$$NAME"
+        log "ERFOLG: lokal geloescht, Zaehler auf $$N"
+      else
+        log "Zeitueberschreitung — Datei bleibt vorsichtshalber unter $$OUTDIR/$$NAME"
+        exit 2
+      fi
