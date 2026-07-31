@@ -57,7 +57,7 @@ configs:
         apt-get install -y -qq --no-install-recommends \
           ca-certificates curl tar libusb-1.0-0 libjpeg62-turbo libpng16-16 \
           libtiff6 libxml2 libqt5widgets5 libqt5gui5 libqt5core5a \
-          poppler-utils jq avahi-utils libavahi-client3 \
+          poppler-utils jq avahi-utils libavahi-client3 iputils-ping \
           >/dev/null 2>&1 || { log "FEHLER: apt-get fehlgeschlagen"; exit 1; }
 
         if [ ! -s "$$CACHE/epson.tar.gz" ]; then
@@ -81,13 +81,30 @@ configs:
         log "Treiber installiert"
       fi
 
+      # ---------- Scanner registrieren und suchen ----------
+      finde_scanner() {
+        log "Pruefe Erreichbarkeit von $$SCANNER_IP"
+        if ping -c2 -W2 "$$SCANNER_IP" >/dev/null 2>&1; then
+          log "  Ping: erreichbar"
+        else
+          log "  Ping: KEINE Antwort"
+        fi
+        log "Registriere Scanner per IP"
+        epsonscan2 -i "$$SCANNER_IP" 2>&1 | while read -r z; do log "  -i: $$z"; done
+        GERAETE=$$(epsonscan2 --list 2>&1)
+        log "Geraeteliste:"
+        echo "$$GERAETE" | while read -r z; do log "  $$z"; done
+      }
+
       # ---------- Profile erzeugen ----------
       setup_profiles() {
-        log "Erzeuge Profile in $$PROFDIR"
+        log "Erzeuge Vorlage mit epsonscan2 -c"
         cd /tmp && rm -f DefaultSettings.SF2
-        epsonscan2 -c >/dev/null 2>&1
-        [ -f /tmp/DefaultSettings.SF2 ] \
-          || { log "FEHLER: Vorlage nicht erzeugt"; return 1; }
+        epsonscan2 -c 2>&1 | while read -r z; do log "  -c: $$z"; done
+        if [ ! -f /tmp/DefaultSettings.SF2 ]; then
+          log "FEHLER: Vorlage nicht erzeugt — Scanner vermutlich nicht ansprechbar"
+          return 1
+        fi
         for M in duplex simplex; do
           [ "$$M" = "duplex" ] && DT=1 || DT=0
           jq --argjson dt "$$DT" --argjson res "$$RESOLUTION" \
@@ -113,10 +130,9 @@ configs:
       MODUS="$${1:-duplex}"
 
       if [ "$$MODUS" = "setup" ] || [ ! -f "$$PROFDIR/duplex.SF2" ]; then
-        epsonscan2 -i "$$SCANNER_IP" >/dev/null 2>&1
+        finde_scanner
         setup_profiles || exit 1
         if [ "$$MODUS" = "setup" ]; then
-          log "Geraeteliste: $$(epsonscan2 --list 2>&1)"
           log "Einrichtung abgeschlossen"
           exit 0
         fi
