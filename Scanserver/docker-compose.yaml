@@ -39,6 +39,18 @@ configs:
       mkdir -p "$$OUTDIR" "$$PROFDIR" "$$LOGDIR" "$$CACHE"
       log() { echo "$$(date '+%F %T') $$*" | tee -a "$$LOG"; }
 
+      # ---------- Diagnose der Umgebung ----------
+      log "--- Umgebung ---"
+      log "SCANNER_IP  = [$${SCANNER_IP:-NICHT GESETZT}]"
+      log "DEVICE_ID   = [$${DEVICE_ID:-NICHT GESETZT}]"
+      log "PAPERLESS   = [$${PAPERLESS:-NICHT GESETZT}]"
+      log "TOKEN       = [$${TOKEN:+gesetzt, $${#TOKEN} Zeichen}]"
+      log "EPSON_URL   = [$${EPSON_URL:-NICHT GESETZT}]"
+      log "RESOLUTION  = [$${RESOLUTION:-NICHT GESETZT}]"
+      log "JPEG_QUALITY= [$${JPEG_QUALITY:-NICHT GESETZT}]"
+      log "COLOR_TYPE  = [$${COLOR_TYPE:-NICHT GESETZT}]"
+      log "----------------"
+      
       # ---------- Einmalige Installation ----------
       if ! command -v epsonscan2 >/dev/null 2>&1; then
         log "Installiere Abhaengigkeiten"
