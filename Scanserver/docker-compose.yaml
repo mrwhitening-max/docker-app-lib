@@ -1,19 +1,6 @@
-
 services:
   scanner:
-    build:
-      context: .
-      dockerfile_inline: |
-        FROM debian:12-slim
-        RUN apt-get update && apt-get install -y --no-install-recommends \
-              ca-certificates curl libusb-1.0-0 libjpeg62-turbo libpng16-16 \
-              libtiff6 libxml2 poppler-utils avahi-utils jq \
-            && rm -rf /var/lib/apt/lists/*
-        COPY epsonscan2.deb /tmp/epsonscan2.deb
-        RUN (dpkg -i /tmp/epsonscan2.deb || (apt-get update && apt-get -f install -y)) \
-            && rm -f /tmp/epsonscan2.deb && rm -rf /var/lib/apt/lists/*
-        WORKDIR /scan
-        ENTRYPOINT ["/usr/local/bin/scan.sh"]
+    image: debian:12-slim
     container_name: scanner
     network_mode: host
     environment:
@@ -21,6 +8,11 @@ services:
       DEVICE_ID: "${DEVICE_ID}"
       PAPERLESS: "${PAPERLESS_URL}"
       TOKEN: "${PAPERLESS_TOKEN}"
+      EPSON_DEB_URL: "${EPSON_DEB_URL}"
+      RESOLUTION: "${RESOLUTION:-300}"
+      JPEG_QUALITY: "${JPEG_QUALITY:-75}"
+      COLOR_TYPE: "${COLOR_TYPE:-2}"
+      BLANK_SKIP: "${BLANK_SKIP:-0}"
       WAIT_LOOPS: "${WAIT_LOOPS:-60}"
       WAIT_SECONDS: "${WAIT_SECONDS:-10}"
     configs:
@@ -28,9 +20,11 @@ services:
         target: /usr/local/bin/scan.sh
         mode: 0755
     volumes:
-      - ./profiles:/scan/profiles:ro
+      - ./profiles:/scan/profiles
       - ./out:/scan/out
       - ./log:/scan/log
+      - ./cache:/var/cache/epson
+    entrypoint: ["/usr/local/bin/scan.sh"]
     restart: "no"
 
 configs:
@@ -39,107 +33,141 @@ configs:
       #!/bin/bash
       set -uo pipefail
 
-      MODUS="$${1:-duplex}"
-      SF2="/scan/profiles/$${MODUS}.SF2"
-      OUTDIR="/scan/out"
-      LOG="/scan/log/scan.log"
-      COUNTER="$$OUTDIR/.counter"
-
+      OUTDIR="/scan/out"; PROFDIR="/scan/profiles"; LOGDIR="/scan/log"
+      CACHE="/var/cache/epson"
+      LOG="$$LOGDIR/scan.log"; COUNTER="$$OUTDIR/.counter"
+      mkdir -p "$$OUTDIR" "$$PROFDIR" "$$LOGDIR" "$$CACHE"
       log() { echo "$$(date '+%F %T') $$*" | tee -a "$$LOG"; }
 
-      mkdir -p "$$OUTDIR" /scan/log
+      # ---------- Einmalige Installation ----------
+      if ! command -v epsonscan2 >/dev/null 2>&1; then
+        log "Installiere Abhaengigkeiten"
+        apt-get update -qq >/dev/null 2>&1
+        apt-get install -y -qq --no-install-recommends \
+          ca-certificates curl libusb-1.0-0 libjpeg62-turbo libpng16-16 \
+          libtiff6 libxml2 poppler-utils jq >/dev/null 2>&1 \
+          || { log "FEHLER: apt-get fehlgeschlagen"; exit 1; }
+        if [ ! -s "$$CACHE/epsonscan2.deb" ]; then
+          log "Lade Epson-Treiber von $$EPSON_DEB_URL"
+          curl -fsSL -A "Mozilla/5.0" -o "$$CACHE/epsonscan2.deb" "$$EPSON_DEB_URL" \
+            || { log "FEHLER: Download fehlgeschlagen — .deb manuell nach ./cache/epsonscan2.deb legen"; exit 1; }
+        else
+          log "Nutze zwischengespeichertes Paket"
+        fi
+        dpkg -i "$$CACHE/epsonscan2.deb" >/dev/null 2>&1 \
+          || apt-get -f install -y -qq >/dev/null 2>&1
+        command -v epsonscan2 >/dev/null 2>&1 \
+          || { log "FEHLER: epsonscan2 nicht installierbar"; exit 1; }
+        log "Treiber installiert"
+      fi
+
+      # ---------- Profile erzeugen ----------
+      setup_profiles() {
+        log "Erzeuge Profile in $$PROFDIR"
+        cd /tmp && rm -f DefaultSettings.SF2
+        epsonscan2 -c >/dev/null 2>&1
+        [ -f /tmp/DefaultSettings.SF2 ] \
+          || { log "FEHLER: Vorlage nicht erzeugt"; return 1; }
+        for M in duplex simplex; do
+          [ "$$M" = "duplex" ] && DT=1 || DT=0
+          jq --argjson dt "$$DT" --argjson res "$$RESOLUTION" \
+             --argjson jqp "$$JPEG_QUALITY" --argjson ct "$$COLOR_TYPE" \
+             --argjson bs "$$BLANK_SKIP" \
+            '.Preset[0]["0"][0] |=
+               (.DuplexType.int = $$dt
+              | .Resolution.int = $$res
+              | .JpegQualityForPdf.int = $$jqp
+              | .ColorType.int = $$ct
+              | .BlankPageSkip.int = $$bs
+              | .PaperDeskew.int = 1
+              | .ImageFormat.int = 6
+              | .Folder.int = 1
+              | .UserDefinePath.string = "/scan/out")' \
+            /tmp/DefaultSettings.SF2 > "$$PROFDIR/$$M.SF2" \
+            || { log "FEHLER: jq bei $$M"; return 1; }
+          log "Profil $$M.SF2 erstellt (Duplex=$$DT, $${RESOLUTION}dpi, Q$$JPEG_QUALITY)"
+        done
+      }
+
       [ -f "$$COUNTER" ] || echo 0 > "$$COUNTER"
+
+      MODUS="$${1:-duplex}"
+
+      if [ "$$MODUS" = "setup" ] || [ ! -f "$$PROFDIR/duplex.SF2" ]; then
+        epsonscan2 -i "$$SCANNER_IP" >/dev/null 2>&1
+        setup_profiles || exit 1
+        [ "$$MODUS" = "setup" ] && { log "Einrichtung abgeschlossen"; exit 0; }
+      fi
 
       case "$$MODUS" in
         duplex|simplex) ;;
-        *) echo "Aufruf: docker compose run --rm scanner [duplex|simplex]"; exit 1 ;;
+        *) echo "Aufruf: docker compose run --rm scanner [setup|duplex|simplex]"; exit 1 ;;
       esac
+      SF2="$$PROFDIR/$$MODUS.SF2"
 
       N=$$(( $$(cat "$$COUNTER") + 1 ))
       NAME=$$(printf "scan_%05d.pdf" "$$N")
       log "=== Lauf $$N gestartet (Modus: $$MODUS) ==="
 
-      if [ ! -f "$$SF2" ]; then
-        log "FEHLER: Profil $$SF2 fehlt — Abbruch"
-        exit 1
-      fi
-
-      # --- Vorabpruefung Paperless ---
-      log "Pruefe Verbindung zu $$PAPERLESS"
+      # ---------- Paperless pruefen ----------
       PRE=$$(curl -s -m 10 -o /dev/null -w "%{http_code}" \
         "$$PAPERLESS/api/documents/" -H "Authorization: Token $$TOKEN")
-      log "Vorabpruefung HTTP-Code: $${PRE:-keine Antwort}"
+      log "Paperless HTTP-Code: $${PRE:-keine Antwort}"
       case "$$PRE" in
         200) log "Paperless erreichbar, Token gueltig" ;;
         401|403) log "FEHLER: Token ungueltig — Abbruch"; exit 1 ;;
-        000|"") log "FEHLER: Paperless nicht erreichbar — Abbruch"; exit 1 ;;
-        *) log "WARNUNG: unerwarteter Code $$PRE, fahre fort" ;;
+        *) log "FEHLER: Paperless nicht erreichbar — Abbruch"; exit 1 ;;
       esac
 
-      # --- Scanner registrieren ---
-      log "Registriere Scanner $$SCANNER_IP"
+      # ---------- Scanner suchen ----------
       epsonscan2 -i "$$SCANNER_IP" >/dev/null 2>&1
       GERAETE=$$(epsonscan2 --list 2>&1)
       log "Geraeteliste: $$GERAETE"
-      if ! echo "$$GERAETE" | grep -q "$$DEVICE_ID"; then
-        log "FEHLER: $$DEVICE_ID nicht gefunden — Abbruch"
-        exit 1
-      fi
+      echo "$$GERAETE" | grep -q "$$DEVICE_ID" \
+        || { log "FEHLER: $$DEVICE_ID nicht gefunden — Abbruch"; exit 1; }
 
-      # --- Scannen ---
+      # ---------- Scannen ----------
       cd "$$OUTDIR"
       log "Starte Scan mit $$SF2"
-      SCANOUT=$$(echo 1 | epsonscan2 --scan "$$DEVICE_ID" "$$SF2" 2>&1)
-      log "epsonscan2 Ausgabe: $$SCANOUT"
+      log "epsonscan2: $$(echo 1 | epsonscan2 --scan "$$DEVICE_ID" "$$SF2" 2>&1)"
 
       NEUEST=$$(find "$$OUTDIR" /root /tmp -maxdepth 2 -name '*.pdf' \
         -newermt '-5 minutes' 2>/dev/null | head -1)
-      if [ -z "$$NEUEST" ]; then
-        log "FEHLER: keine frische PDF gefunden — Abbruch"
-        exit 1
-      fi
+      [ -n "$$NEUEST" ] || { log "FEHLER: keine frische PDF gefunden"; exit 1; }
       mv "$$NEUEST" "$$OUTDIR/$$NAME"
       SEITEN=$$(pdfinfo "$$OUTDIR/$$NAME" 2>/dev/null | awk '/^Pages/{print $$2}')
-      log "Datei: $$NAME ($$(stat -c %s "$$OUTDIR/$$NAME") Bytes, $${SEITEN:-?} Seiten)"
+      log "Datei $$NAME: $$(stat -c %s "$$OUTDIR/$$NAME") Bytes, $${SEITEN:-?} Seiten"
 
-      # --- Hochladen ---
-      log "Lade hoch: $$NAME"
-      ANTWORT=$$(curl -s -m 300 -w '\n%{http_code}' -X POST \
+      # ---------- Hochladen ----------
+      ANT=$$(curl -s -m 300 -w '\n%{http_code}' -X POST \
         "$$PAPERLESS/api/documents/post_document/" \
-        -H "Authorization: Token $$TOKEN" \
-        -F "document=@$$OUTDIR/$$NAME" 2>&1)
-      CODE=$$(echo "$$ANTWORT" | tail -1)
-      BODY=$$(echo "$$ANTWORT" | head -n -1)
+        -H "Authorization: Token $$TOKEN" -F "document=@$$OUTDIR/$$NAME")
+      CODE=$$(echo "$$ANT" | tail -1); BODY=$$(echo "$$ANT" | head -n -1)
       log "Upload HTTP-Code: $$CODE"
       log "Upload Antwort: $$BODY"
+      [ "$$CODE" = "200" ] \
+        || { log "FEHLER: Upload gescheitert — Datei bleibt unter $$OUTDIR/$$NAME"; exit 1; }
 
-      if [ "$$CODE" != "200" ]; then
-        log "FEHLER: Upload gescheitert — Datei bleibt unter $$OUTDIR/$$NAME"
-        exit 1
-      fi
-
+      # ---------- Verarbeitung verfolgen ----------
       TASK=$$(echo "$$BODY" | tr -d '"')
       log "Task-ID: $$TASK"
-
-      # --- Verarbeitung verfolgen ---
       ERFOLG=0
       for i in $$(seq 1 "$$WAIT_LOOPS"); do
         sleep "$$WAIT_SECONDS"
-        STATUS=$$(curl -s -m 15 "$$PAPERLESS/api/tasks/?task_id=$$TASK" \
-          -H "Authorization: Token $$TOKEN")
-        LAGE=$$(echo "$$STATUS" | grep -o '"status":"[^"]*"' | head -1)
+        LAGE=$$(curl -s -m 15 "$$PAPERLESS/api/tasks/?task_id=$$TASK" \
+          -H "Authorization: Token $$TOKEN" | grep -o '"status":"[^"]*"' | head -1)
         log "Statusabfrage $$i: $${LAGE:-keine Angabe}"
         case "$$LAGE" in
           *SUCCESS*) log "Verarbeitung erfolgreich"; ERFOLG=1; break ;;
-          *FAILURE*) log "FEHLER bei Verarbeitung: $$STATUS"; exit 1 ;;
+          *FAILURE*) log "FEHLER bei Verarbeitung — Datei bleibt liegen"; exit 1 ;;
         esac
       done
 
       echo "$$N" > "$$COUNTER"
       if [ "$$ERFOLG" = "1" ]; then
         rm -f "$$OUTDIR/$$NAME"
-        log "ERFOLG: lokal geloescht, Zaehler auf $$N"
+        log "ERFOLG: hochgeladen und lokal geloescht, Zaehler auf $$N"
       else
-        log "Zeitueberschreitung — Datei bleibt vorsichtshalber unter $$OUTDIR/$$NAME"
+        log "Zeitueberschreitung — Datei bleibt unter $$OUTDIR/$$NAME"
         exit 2
       fi
