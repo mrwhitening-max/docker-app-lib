@@ -7,5 +7,7 @@ services:
       - /data/homarr/configs:/app/data/configs
       - /data/homarr/icons:/app/public/icons
       - /data/homarr/data:/data
+    environment:
+      - SECRET_ENCRYPTION_KEY=${SECRET_ENCRYPTION_KEY}
     ports:
       - '7575:7575'
