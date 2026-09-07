@@ -8,7 +8,6 @@ services:
 
   consul-agent:
     image: hashicorp/consul:${CONSUL_VERSION:-1.22.3}
-    container_name: consul-agent
     hostname: ${CONSUL_NODE_NAME:-reactive-resume}
     restart: unless-stopped
     network_mode: host
