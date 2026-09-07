@@ -3,7 +3,7 @@ version: '3'
 services:
   homarr:
     container_name: homarr
-    image: garage1118/homarr:latest
+    image: ghcr.io/homarr-labs/homarr:latest
     restart: unless-stopped
     volumes:
       - /data/homarr/configs:/app/data/configs
