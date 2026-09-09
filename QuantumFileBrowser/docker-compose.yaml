@@ -11,6 +11,11 @@ services:
       - ./files:/files
       - ./data:/home/filebrowser/data
       - ./cache:/home/filebrowser/tmp
+      - type: bind
+        source: ${SHARE_DIR:-/mnt/share}
+        target: /shares
+        bind:
+          create_host_path: false
     configs:
       - source: filebrowser_config
         target: /home/filebrowser/data/config.yaml
@@ -30,5 +35,10 @@ configs:
         port: 3923
         sources:
           - path: /files
+            name: Lokal
+            config:
+              defaultEnabled: true
+          - path: /shares
+            name: Shares
             config:
               defaultEnabled: true
