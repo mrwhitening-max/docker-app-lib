@@ -1,1 +1,34 @@
--
+services:
+  filebrowser-quantum:
+    image: gtstef/filebrowser:stable
+    container_name: filebrowser-quantum
+    user: "0:0"
+    ports:
+      - "${FILEBROWSER_PORT:-3923}:3923"
+    environment:
+      - FILEBROWSER_ADMIN_PASSWORD=${FILEBROWSER_ADMIN_PASSWORD:?set FILEBROWSER_ADMIN_PASSWORD in .env}
+    volumes:
+      - ./files:/files
+      - ./data:/home/filebrowser/data
+      - ./cache:/home/filebrowser/tmp
+    configs:
+      - source: filebrowser_config
+        target: /home/filebrowser/data/config.yaml
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3923/health"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped
+
+configs:
+  filebrowser_config:
+    content: |
+      server:
+        database: "data/database.db"
+        port: 3923
+        sources:
+          - path: /files
+            config:
+              defaultEnabled: true
