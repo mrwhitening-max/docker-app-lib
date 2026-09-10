@@ -5,12 +5,12 @@ services:
     app:
         image: jez500/pricebuddy:${PRICEBUDDY_VERSION:-latest}
         restart: unless-stopped
+        command: sh -c 'touch storage/.env && ln -sf storage/.env .env && exec /start-app.sh'
         ports:
             - ${APP_PORT:-8080}:80
         volumes:
             - storage:/app/storage
         environment:
-            APP_KEY: ${APP_KEY}
             DB_HOST: database
             DB_USERNAME: ${DB_USERNAME:-pricebuddy}
             DB_PASSWORD: ${DB_PASSWORD}
