@@ -10,13 +10,13 @@ services:
         volumes:
             - storage:/app/storage
         environment:
-            APP_KEY: ${APP_KEY:?APP_KEY fehlt in .env}
+            APP_KEY: ${APP_KEY}
             DB_HOST: database
             DB_USERNAME: ${DB_USERNAME:-pricebuddy}
-            DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD fehlt in .env}
+            DB_PASSWORD: ${DB_PASSWORD}
             DB_DATABASE: ${DB_DATABASE:-pricebuddy}
             APP_USER_EMAIL: ${APP_USER_EMAIL:-admin@example.com}
-            APP_USER_PASSWORD: ${APP_USER_PASSWORD:?APP_USER_PASSWORD fehlt in .env}
+            APP_USER_PASSWORD: ${APP_USER_PASSWORD}
             SCRAPER_BASE_URL: http://scraper:3000
             AFFILIATE_ENABLED: "${AFFILIATE_ENABLED:-true}"
         depends_on:
@@ -31,8 +31,8 @@ services:
         environment:
             MYSQL_DATABASE: ${DB_DATABASE:-pricebuddy}
             MYSQL_USER: ${DB_USERNAME:-pricebuddy}
-            MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD fehlt in .env}
-            MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD fehlt in .env}
+            MYSQL_PASSWORD: ${DB_PASSWORD}
+            MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
         volumes:
             - database:/var/lib/mysql
         networks:
