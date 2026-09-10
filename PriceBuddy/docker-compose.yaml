@@ -1,0 +1,60 @@
+name: pricebuddy
+
+services:
+
+    app:
+        image: jez500/pricebuddy:${PRICEBUDDY_VERSION:-latest}
+        restart: unless-stopped
+        ports:
+            - ${APP_PORT:-8080}:80
+        volumes:
+            - storage:/app/storage
+            - ./app.env:/app/.env
+        environment:
+            DB_HOST: database
+            DB_USERNAME: ${DB_USERNAME:-pricebuddy}
+            DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD fehlt in .env}
+            DB_DATABASE: ${DB_DATABASE:-pricebuddy}
+            APP_USER_EMAIL: ${APP_USER_EMAIL:-admin@example.com}
+            APP_USER_PASSWORD: ${APP_USER_PASSWORD:?APP_USER_PASSWORD fehlt in .env}
+            SCRAPER_BASE_URL: http://scraper:3000
+            AFFILIATE_ENABLED: "${AFFILIATE_ENABLED:-true}"
+        depends_on:
+            database:
+                condition: service_healthy
+        networks:
+            - default
+
+    database:
+        image: mysql:${MYSQL_VERSION:-8.2}
+        restart: unless-stopped
+        environment:
+            MYSQL_DATABASE: ${DB_DATABASE:-pricebuddy}
+            MYSQL_USER: ${DB_USERNAME:-pricebuddy}
+            MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD fehlt in .env}
+            MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD fehlt in .env}
+        volumes:
+            - database:/var/lib/mysql
+        networks:
+            - default
+        healthcheck:
+            test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 1m
+
+    scraper:
+        image: jez500/seleniumbase-scrapper:${SCRAPER_VERSION:-latest}
+        restart: unless-stopped
+        networks:
+            - default
+        ports:
+            - ${SCRAPER_BIND:-127.0.0.1}:${SCRAPER_PORT:-3030}:3000
+
+volumes:
+    storage:
+    database:
+
+networks:
+    default:
