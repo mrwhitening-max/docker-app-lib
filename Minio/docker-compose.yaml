@@ -9,7 +9,7 @@ services:
       MINIO_ROOT_USER: ${MINIO_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD}
     volumes:
-      - /data/data:/mnt/data
+      - /data/data:${MINIO_STORAGE_PATH}
       - /data/minio.license:/minio.license
       - /data/certs:/etc/minio/certs
     command: minio server /mnt/data --license /minio.license --console-address ":${MINIO_WEB_CONSOLE_PORT:-9001}"
