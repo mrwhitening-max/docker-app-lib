@@ -2,37 +2,61 @@ name: dsh
 
 services:
 
-  dsh-init:
-    image: ghcr.io/obrige/dsh-docker:${DSH_IMAGE_TAG:-latest}
-    pull_policy: always
+  dsh-install:
+    image: ${NODE_IMAGE:-node:24}
     user: "0:0"
-    entrypoint: ["sh", "-c", "find /data /workspace -xdev -not -user 1000 -exec chown 1000:1000 {} +"]
-    network_mode: none
     restart: "no"
     security_opt:
       - no-new-privileges:true
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        find /data /workspace -xdev -not -user 1000 -exec chown 1000:1000 {} +
+        if [ ! -f /opt/dsh/.installed-${DSH_VERSION:-0.1.5-rc.1} ]; then
+          rm -rf /opt/dsh/lib /opt/dsh/bin /opt/dsh/.installed-*
+          npm install -g --prefix /opt/dsh --no-fund --no-audit --loglevel=error @deepseek-ai/dsh@${DSH_VERSION:-0.1.5-rc.1}
+          touch /opt/dsh/.installed-${DSH_VERSION:-0.1.5-rc.1}
+        fi
     volumes:
+      - dsh-app:/opt/dsh
       - ${DSH_DATA:-dsh-data}:/data
       - ${DSH_WORKSPACE:-dsh-workspace}:/workspace
 
   dsh:
-    image: ghcr.io/obrige/dsh-docker:${DSH_IMAGE_TAG:-latest}
+    image: ${NODE_IMAGE:-node:24}
     container_name: dsh
     restart: unless-stopped
     init: true
     user: "1000:1000"
+    working_dir: /workspace
     stop_grace_period: 30s
     depends_on:
-      dsh-init:
+      dsh-install:
         condition: service_completed_successfully
-    ports:
-      - ${DSH_BIND:-127.0.0.1}:${DSH_PORT:-3080}:3080
-    volumes:
-      - ${DSH_DATA:-dsh-data}:/data
-      - ${DSH_WORKSPACE:-dsh-workspace}:/workspace
+    entrypoint:
+      - sh
+      - -c
+      - |
+        node -e "require('net').createServer(c=>{const s=require('net').connect(3081,'127.0.0.1');c.pipe(s).pipe(c);c.on('error',()=>s.destroy());s.on('error',()=>c.destroy())}).listen(3080,'0.0.0.0')" &
+        exec dsh web --port 3081
     environment:
       DSH_HOME: /data
       HOME: /home/node
+      PATH: /opt/dsh/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3080/',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 90s
+      retries: 3
+    ports:
+      - ${DSH_BIND:-127.0.0.1}:${DSH_PORT:-3080}:3080
+    volumes:
+      - dsh-app:/opt/dsh:ro
+      - ${DSH_DATA:-dsh-data}:/data
+      - ${DSH_WORKSPACE:-dsh-workspace}:/workspace
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -50,5 +74,6 @@ services:
         max-file: "3"
 
 volumes:
+  dsh-app:
   dsh-data:
   dsh-workspace:
