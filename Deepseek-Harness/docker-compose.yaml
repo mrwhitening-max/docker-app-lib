@@ -31,8 +31,12 @@ services:
               const models=(j.data||[]).map(m=>({id:String(m.id||"")})).filter(m=>m.id);
               if(!models.length) throw new Error("keine Modelle gemeldet");
               const entry={id:"llm-pi-ai",name:"@deepseek-ai/dsh-llm-pi-ai",config:{providers:{litellm:{displayName:"LiteLLM",api:"openai-completions",baseURL:url,apiKeyEnv:"LITELLM_API_KEY",models}}}};
-              extra="\n- "+JSON.stringify(entry)+"\n";
-              console.log("litellm: "+models.length+" Modelle eingebunden");
+              const wanted=(process.env.LITELLM_DEFAULT_MODEL||"").trim();
+              const chosen=models.some(m=>m.id===wanted)?wanted:models[0].id;
+              const def={id:"agent-default-model",name:"@deepseek-ai/dsh-agent-default-model",config:{provider:"litellm",model:chosen}};
+              extra="\n- "+JSON.stringify(entry)+"\n- "+JSON.stringify(def)+"\n";
+              console.log("litellm: "+models.length+" Modelle eingebunden: "+models.map(m=>m.id).join(", "));
+              console.log("litellm: Standardmodell "+chosen);
             }catch(e){console.error("litellm: uebersprungen ("+e.message+")");}
           }
           fs.writeFileSync("/tmp/dsh.patch.yml",base+extra);
@@ -45,6 +49,7 @@ services:
       HOME: /workspace
       LITELLM_URL: ${LITELLM_URL:-}
       LITELLM_API_KEY: ${LITELLM_API_KEY:-}
+      LITELLM_DEFAULT_MODEL: ${LITELLM_DEFAULT_MODEL:-}
     volumes:
       - dsh-home:/home/node/.dsh
       - ${DSH_WORKSPACE:-dsh-workspace}:/workspace
