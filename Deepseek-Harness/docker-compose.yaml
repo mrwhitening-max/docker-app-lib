@@ -40,7 +40,7 @@ services:
       - -c
       - |
         node -e "require('net').createServer(c=>{const s=require('net').connect(3081,'127.0.0.1');c.pipe(s).pipe(c);c.on('error',()=>s.destroy());s.on('error',()=>c.destroy())}).listen(3080,'0.0.0.0')" &
-        exec dsh web --port 3081
+        exec dsh web --port 3081 --no-open --trusted-host 127.0.0.1:${DSH_PORT:-3080} localhost:${DSH_PORT:-3080} ${DSH_TRUSTED_HOST:-}
     environment:
       DSH_HOME: /data
       HOME: /home/node
