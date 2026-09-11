@@ -1,0 +1,31 @@
+name: dsh
+
+services:
+
+  dsh:
+    image: dsh:local
+    pull_policy: build
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM node:24-slim
+        RUN apt-get update \
+         && apt-get install -y --no-install-recommends git curl socat ca-certificates python3 make g++ \
+         && rm -rf /var/lib/apt/lists/*
+        ADD https://registry.npmjs.org/@deepseek-ai/dsh/latest /tmp/dsh-latest.json
+        RUN npm install -g @deepseek-ai/dsh
+        ENV DSH_HOME=/data
+        RUN mkdir -p /data /workspace
+        WORKDIR /workspace
+        EXPOSE 3080
+        HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+          CMD curl -fsS http://127.0.0.1:3080/ >/dev/null || exit 1
+        ENTRYPOINT ["sh", "-c", "socat TCP-LISTEN:3080,fork,reuseaddr,bind=0.0.0.0 TCP:127.0.0.1:3081 & exec dsh web --port 3081"]
+    container_name: dsh
+    restart: unless-stopped
+    init: true
+    ports:
+      - ${DSH_PORT:-3080}:3080
+    volumes:
+      - ${DSH_DATA:-./data}:/data
+      - ${DSH_WORKSPACE:-./workspace}:/workspace
