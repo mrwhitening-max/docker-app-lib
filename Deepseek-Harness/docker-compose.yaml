@@ -17,11 +17,34 @@ services:
         HOSTS="$$(node -p "Object.values(require('os').networkInterfaces()).flat().filter(i=>i.family==='IPv4').map(i=>i.address+':3080').join(' ')") $$(hostname):3080 localhost:3080"
         for h in ${DSH_HOSTNAME:-}; do HOSTS="$$HOSTS $$h $$h:3080"; done
         echo "dsh trusted hosts: $$HOSTS"
-        exec /usr/local/bin/deepseek-harness-entrypoint web --patch /opt/deepseek-harness/web.cordis.patch.yml --no-open --trusted-host $$HOSTS
+        node -e '
+        const fs=require("fs");
+        const base=fs.readFileSync("/opt/deepseek-harness/web.cordis.patch.yml","utf8");
+        const url=(process.env.LITELLM_URL||"").trim().replace(/\/+$$/,"");
+        (async()=>{
+          let extra="";
+          if(url){
+            try{
+              const r=await fetch(url+"/models",{headers:{Authorization:"Bearer "+(process.env.LITELLM_API_KEY||"")},signal:AbortSignal.timeout(10000)});
+              if(!r.ok) throw new Error("HTTP "+r.status);
+              const j=await r.json();
+              const models=(j.data||[]).map(m=>({id:String(m.id||"")})).filter(m=>m.id);
+              if(!models.length) throw new Error("keine Modelle gemeldet");
+              const entry={id:"llm-pi-ai",name:"@deepseek-ai/dsh-llm-pi-ai",config:{providers:{litellm:{displayName:"LiteLLM",api:"openai-completions",baseURL:url,apiKeyEnv:"LITELLM_API_KEY",models}}}};
+              extra="\n- "+JSON.stringify(entry)+"\n";
+              console.log("litellm: "+models.length+" Modelle eingebunden");
+            }catch(e){console.error("litellm: uebersprungen ("+e.message+")");}
+          }
+          fs.writeFileSync("/tmp/dsh.patch.yml",base+extra);
+        })();
+        '
+        exec /usr/local/bin/deepseek-harness-entrypoint web --patch /tmp/dsh.patch.yml --no-open --trusted-host $$HOSTS
     environment:
       DSH_TELEMETRY_DISABLED: "1"
       DSH_DESKTOP_ENABLED: "${DSH_DESKTOP_ENABLED:-0}"
       HOME: /workspace
+      LITELLM_URL: ${LITELLM_URL:-}
+      LITELLM_API_KEY: ${LITELLM_API_KEY:-}
     volumes:
       - dsh-home:/home/node/.dsh
       - ${DSH_WORKSPACE:-dsh-workspace}:/workspace
