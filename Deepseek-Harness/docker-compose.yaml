@@ -2,65 +2,42 @@ name: dsh
 
 services:
 
-  dsh-install:
-    image: ${NODE_IMAGE:-node:24}
-    user: "0:0"
-    restart: "no"
-    security_opt:
-      - no-new-privileges:true
-    entrypoint:
-      - sh
-      - -c
-      - |
-        set -e
-        find /data /workspace -xdev -not -user 1000 -exec chown 1000:1000 {} +
-        if [ ! -f /opt/dsh/.installed-${DSH_VERSION:-0.1.5-rc.1} ]; then
-          rm -rf /opt/dsh/lib /opt/dsh/bin /opt/dsh/.installed-*
-          npm install -g --prefix /opt/dsh --no-fund --no-audit --loglevel=error @deepseek-ai/dsh@${DSH_VERSION:-0.1.5-rc.1}
-          touch /opt/dsh/.installed-${DSH_VERSION:-0.1.5-rc.1}
-        fi
-    volumes:
-      - dsh-app:/opt/dsh
-      - ${DSH_DATA:-dsh-data}:/data
-      - ${DSH_WORKSPACE:-dsh-workspace}:/workspace
-
   dsh:
-    image: ${NODE_IMAGE:-node:24}
+    image: runzhliu/deepseek-harness:${DSH_IMAGE_VERSION:-0.1.5-rc.2-r1}
     container_name: dsh
     restart: unless-stopped
-    init: true
-    user: "1000:1000"
-    working_dir: /workspace
+    network_mode: host
     stop_grace_period: 30s
-    depends_on:
-      dsh-install:
-        condition: service_completed_successfully
     entrypoint:
+      - /usr/bin/tini
+      - --
       - sh
       - -c
       - |
-        node -e "require('net').createServer(c=>{const s=require('net').connect(3081,'127.0.0.1');c.pipe(s).pipe(c);c.on('error',()=>s.destroy());s.on('error',()=>c.destroy())}).listen(3080,'0.0.0.0')" &
-        exec dsh web --port 3081 --no-open --trusted-host 127.0.0.1:${DSH_PORT:-3080} localhost:${DSH_PORT:-3080} ${DSH_TRUSTED_HOST:-}
+        HOSTS="$$(node -p "Object.values(require('os').networkInterfaces()).flat().filter(i=>i.family==='IPv4').map(i=>i.address+':3080').join(' ')") $$(hostname):3080 localhost:3080"
+        echo "dsh trusted hosts: $$HOSTS"
+        exec /usr/local/bin/deepseek-harness-entrypoint web --patch /opt/deepseek-harness/web.cordis.patch.yml --no-open --trusted-host $$HOSTS
     environment:
-      DSH_HOME: /data
-      HOME: /home/node
-      PATH: /opt/dsh/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-    healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3080/',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"]
-      interval: 30s
-      timeout: 5s
-      start_period: 90s
-      retries: 3
-    ports:
-      - ${DSH_BIND:-127.0.0.1}:${DSH_PORT:-3080}:3080
+      DSH_TELEMETRY_DISABLED: "1"
+      DSH_DESKTOP_ENABLED: "${DSH_DESKTOP_ENABLED:-0}"
+      HOME: /workspace
     volumes:
-      - dsh-app:/opt/dsh:ro
-      - ${DSH_DATA:-dsh-data}:/data
+      - dsh-home:/home/node/.dsh
       - ${DSH_WORKSPACE:-dsh-workspace}:/workspace
-    security_opt:
-      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=512m
+    shm_size: "1gb"
     cap_drop:
       - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3080/').then(r=>process.exit(r.status===401?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
     deploy:
       resources:
         limits:
@@ -74,6 +51,5 @@ services:
         max-file: "3"
 
 volumes:
-  dsh-app:
-  dsh-data:
+  dsh-home:
   dsh-workspace:
