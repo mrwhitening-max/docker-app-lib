@@ -2,56 +2,37 @@ name: dsh
 
 services:
 
+  dsh-init:
+    image: ghcr.io/obrige/dsh-docker:${DSH_IMAGE_TAG:-latest}
+    pull_policy: always
+    user: "0:0"
+    entrypoint: ["sh", "-c", "find /data /workspace -xdev -not -user 1000 -exec chown 1000:1000 {} +"]
+    network_mode: none
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ${DSH_DATA:-dsh-data}:/data
+      - ${DSH_WORKSPACE:-dsh-workspace}:/workspace
+
   dsh:
-    image: dsh:${DSH_VERSION:-0.1.5-rc.1}
-    pull_policy: build
-    build:
-      context: .
-      args:
-        NODE_IMAGE: ${NODE_IMAGE:-node:24-slim}
-        DSH_VERSION: ${DSH_VERSION:-0.1.5-rc.1}
-        EXTRA_PACKAGES: ${DSH_EXTRA_PACKAGES:-python3}
-      dockerfile_inline: |
-        ARG NODE_IMAGE
-
-        FROM $${NODE_IMAGE} AS build
-        ARG DSH_VERSION
-        RUN apt-get update \
-         && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
-         && rm -rf /var/lib/apt/lists/*
-        RUN npm install -g --no-fund --no-audit "@deepseek-ai/dsh@$${DSH_VERSION}" \
-         && npm cache clean --force
-
-        FROM $${NODE_IMAGE}
-        ARG DSH_VERSION
-        ARG EXTRA_PACKAGES
-        LABEL org.opencontainers.image.title="DeepSeek Harness Web UI" \
-              org.opencontainers.image.version="$${DSH_VERSION}" \
-              org.opencontainers.image.source="https://github.com/deepseek-ai/deepseek-harness" \
-              org.opencontainers.image.licenses="MIT"
-        RUN apt-get update \
-         && apt-get install -y --no-install-recommends git curl socat ca-certificates $${EXTRA_PACKAGES} \
-         && rm -rf /var/lib/apt/lists/*
-        COPY --from=build /usr/local/lib/node_modules/@deepseek-ai /usr/local/lib/node_modules/@deepseek-ai
-        RUN ln -s ../lib/node_modules/@deepseek-ai/dsh/lib/bin.js /usr/local/bin/dsh \
-         && mkdir -p /data /workspace \
-         && chown node:node /data /workspace
-        ENV DSH_HOME=/data
-        USER node
-        WORKDIR /workspace
-        EXPOSE 3080
-        HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
-          CMD curl -fsS http://127.0.0.1:3080/ >/dev/null || exit 1
-        ENTRYPOINT ["sh", "-c", "socat TCP-LISTEN:3080,fork,reuseaddr,bind=0.0.0.0 TCP:127.0.0.1:3081 & exec dsh web --port 3081"]
+    image: ghcr.io/obrige/dsh-docker:${DSH_IMAGE_TAG:-latest}
     container_name: dsh
     restart: unless-stopped
     init: true
+    user: "1000:1000"
     stop_grace_period: 30s
+    depends_on:
+      dsh-init:
+        condition: service_completed_successfully
     ports:
       - ${DSH_BIND:-127.0.0.1}:${DSH_PORT:-3080}:3080
     volumes:
       - ${DSH_DATA:-dsh-data}:/data
       - ${DSH_WORKSPACE:-dsh-workspace}:/workspace
+    environment:
+      DSH_HOME: /data
+      HOME: /home/node
     security_opt:
       - no-new-privileges:true
     cap_drop:
