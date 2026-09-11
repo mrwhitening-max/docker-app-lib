@@ -56,12 +56,12 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    pids_limit: ${DSH_PIDS:-512}
     deploy:
       resources:
         limits:
           cpus: "${DSH_CPUS:-2}"
           memory: ${DSH_MEMORY:-4g}
+          pids: 512
     logging:
       driver: json-file
       options:
