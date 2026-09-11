@@ -3,19 +3,41 @@ name: dsh
 services:
 
   dsh:
-    image: dsh:local
+    image: dsh:${DSH_VERSION:-0.1.5-rc.1}
     pull_policy: build
     build:
       context: .
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:24-slim}
+        DSH_VERSION: ${DSH_VERSION:-0.1.5-rc.1}
+        EXTRA_PACKAGES: ${DSH_EXTRA_PACKAGES:-python3}
       dockerfile_inline: |
-        FROM node:24-slim
+        ARG NODE_IMAGE
+
+        FROM $${NODE_IMAGE} AS build
+        ARG DSH_VERSION
         RUN apt-get update \
-         && apt-get install -y --no-install-recommends git curl socat ca-certificates python3 make g++ \
+         && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
          && rm -rf /var/lib/apt/lists/*
-        ADD https://registry.npmjs.org/@deepseek-ai/dsh/latest /tmp/dsh-latest.json
-        RUN npm install -g @deepseek-ai/dsh
+        RUN npm install -g --no-fund --no-audit "@deepseek-ai/dsh@$${DSH_VERSION}" \
+         && npm cache clean --force
+
+        FROM $${NODE_IMAGE}
+        ARG DSH_VERSION
+        ARG EXTRA_PACKAGES
+        LABEL org.opencontainers.image.title="DeepSeek Harness Web UI" \
+              org.opencontainers.image.version="$${DSH_VERSION}" \
+              org.opencontainers.image.source="https://github.com/deepseek-ai/deepseek-harness" \
+              org.opencontainers.image.licenses="MIT"
+        RUN apt-get update \
+         && apt-get install -y --no-install-recommends git curl socat ca-certificates $${EXTRA_PACKAGES} \
+         && rm -rf /var/lib/apt/lists/*
+        COPY --from=build /usr/local/lib/node_modules/@deepseek-ai /usr/local/lib/node_modules/@deepseek-ai
+        RUN ln -s ../lib/node_modules/@deepseek-ai/dsh/lib/bin.js /usr/local/bin/dsh \
+         && mkdir -p /data /workspace \
+         && chown node:node /data /workspace
         ENV DSH_HOME=/data
-        RUN mkdir -p /data /workspace
+        USER node
         WORKDIR /workspace
         EXPOSE 3080
         HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
@@ -24,8 +46,28 @@ services:
     container_name: dsh
     restart: unless-stopped
     init: true
+    stop_grace_period: 30s
     ports:
-      - ${DSH_PORT:-3080}:3080
+      - ${DSH_BIND:-127.0.0.1}:${DSH_PORT:-3080}:3080
     volumes:
-      - ${DSH_DATA:-./data}:/data
-      - ${DSH_WORKSPACE:-./workspace}:/workspace
+      - ${DSH_DATA:-dsh-data}:/data
+      - ${DSH_WORKSPACE:-dsh-workspace}:/workspace
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: ${DSH_PIDS:-512}
+    deploy:
+      resources:
+        limits:
+          cpus: "${DSH_CPUS:-2}"
+          memory: ${DSH_MEMORY:-4g}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  dsh-data:
+  dsh-workspace:
