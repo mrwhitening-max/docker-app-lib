@@ -15,6 +15,7 @@ services:
       - -c
       - |
         HOSTS="$$(node -p "Object.values(require('os').networkInterfaces()).flat().filter(i=>i.family==='IPv4').map(i=>i.address+':3080').join(' ')") $$(hostname):3080 localhost:3080"
+        for h in ${DSH_HOSTNAME:-}; do HOSTS="$$HOSTS $$h $$h:3080"; done
         echo "dsh trusted hosts: $$HOSTS"
         exec /usr/local/bin/deepseek-harness-entrypoint web --patch /opt/deepseek-harness/web.cordis.patch.yml --no-open --trusted-host $$HOSTS
     environment:
