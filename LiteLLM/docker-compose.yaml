@@ -31,6 +31,7 @@ services:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - OPENROUTER_API_KEY2=${OPENROUTER_API_KEY2}
       - OPENROUTER_API_KEY3=${OPENROUTER_API_KEY3}
+      - TYPESAFE_API_KEY=${TYPESAFE_API_KEY}
     env_file:
       - .env
     depends_on:
