@@ -49,5 +49,5 @@ services:
 
 networks:
   traefik_network:
-    external: true
+    external: false
     name: ${TRAEFIK_NETWORK_NAME:-traefik_default}
