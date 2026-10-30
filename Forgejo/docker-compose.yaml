@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   forgejo:
     image: ${FORGEJO_IMAGE:-codeberg.org/forgejo/forgejo:15}
@@ -9,7 +7,7 @@ services:
       - USER_UID=${USER_UID:-1000}
       - USER_GID=${USER_GID:-1000}
       - FORGEJO__server__DOMAIN=${FORGEJO_HOST}
-      - FORGEJO__server__ROOT_URL=${FORGEJO_HOST}
+      - FORGEJO__server__ROOT_URL=http://${FORGEJO_HOST}/
       - FORGEJO__server__HTTP_PORT=3000
       - FORGEJO__server__SSH_DOMAIN=${FORGEJO_HOST}
       - FORGEJO__server__SSH_PORT=${SSH_EXPOSE_PORT:-2222}
@@ -31,23 +29,13 @@ services:
     ports:
       - "${SSH_EXPOSE_PORT:-2222}:${SSH_EXPOSE_PORT:-2222}"
     labels:
-      # --- Enable Traefik ---
       - "traefik.enable=true"
       - "traefik.docker.network=${TRAEFIK_NETWORK_NAME:-traefik_default}"
-
-      # --- Router Configuration ---
       - "traefik.http.routers.forgejo.rule=Host(`${FORGEJO_HOST}`)"
-      - "traefik.http.routers.forgejo.entrypoints=websecure"
-      - "traefik.http.routers.forgejo.tls.certresolver=${TRAEFIK_CERTRESOLVER:-myresolver}"
-
-      # --- Service Configuration (Forgejo HTTP port) ---
+      - "traefik.http.routers.forgejo.entrypoints=web"
       - "traefik.http.services.forgejo.loadbalancer.server.port=3000"
-
-      # --- OAuth2 Protection (optional) ---
-      # Only applied when OAUTH_PROXY=true; leave unset to skip forward-auth middleware
-      - "traefik.http.routers.forgejo.middlewares=${FORGEJO_MIDDLEWARES:-}"
 
 networks:
   traefik_network:
-    external: false
+    external: true
     name: ${TRAEFIK_NETWORK_NAME:-traefik_default}
