@@ -1,13 +1,13 @@
 services:
   forgejo:
-    image: ${FORGEJO_IMAGE:-codeberg.org/forgejo/forgejo:15}
+    image: ${FORGEJO_IMAGE:-codeberg.org/forgejo/forgejo:15.0.11}
     container_name: ${FORGEJO_CONTAINER_NAME:-forgejo}
     restart: unless-stopped
     environment:
       - USER_UID=${USER_UID:-1000}
       - USER_GID=${USER_GID:-1000}
       - FORGEJO__server__DOMAIN=${FORGEJO_HOST}
-      - FORGEJO__server__ROOT_URL=http://${FORGEJO_HOST}/
+      - FORGEJO__server__ROOT_URL=http://${FORGEJO_HOST}:${HTTP_EXPOSE_PORT:-3000}/
       - FORGEJO__server__HTTP_PORT=3000
       - FORGEJO__server__SSH_DOMAIN=${FORGEJO_HOST}
       - FORGEJO__server__SSH_PORT=${SSH_EXPOSE_PORT:-2222}
@@ -24,18 +24,6 @@ services:
       - ${DATA_PATH:-./data}:/data
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
-    networks:
-      - traefik_network
     ports:
+      - "${HTTP_EXPOSE_PORT:-3000}:3000"
       - "${SSH_EXPOSE_PORT:-2222}:${SSH_EXPOSE_PORT:-2222}"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=${TRAEFIK_NETWORK_NAME:-traefik_default}"
-      - "traefik.http.routers.forgejo.rule=Host(`${FORGEJO_HOST}`)"
-      - "traefik.http.routers.forgejo.entrypoints=web"
-      - "traefik.http.services.forgejo.loadbalancer.server.port=3000"
-
-networks:
-  traefik_network:
-    external: true
-    name: ${TRAEFIK_NETWORK_NAME:-traefik_default}
