@@ -24,7 +24,6 @@ services:
       - FORGEJO__database__PATH=/data/gitea/gitea.db
 
       # --- Sicherheit ---
-      - FORGEJO__security__INSTALL_LOCK=${INSTALL_LOCK:-false}
       - FORGEJO__security__SECRET_KEY=${SECRET_KEY}
       - FORGEJO__security__INTERNAL_TOKEN=${INTERNAL_TOKEN}
       # Schutz für v15: Standard ist sonst "*"
