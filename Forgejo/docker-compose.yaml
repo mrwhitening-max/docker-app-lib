@@ -13,7 +13,8 @@ services:
 
       # --- Server / URLs ---
       - FORGEJO__server__DOMAIN=${FORGEJO_HOST}
-      - FORGEJO__server__ROOT_URL=http://${FORGEJO_HOST}:${HTTP_EXPOSE_PORT:-3000}/
+      # Vollständige URL, wie sie im Browser steht (mit http:// und / am Ende)
+      - FORGEJO__server__ROOT_URL=${ROOT_URL}
       - FORGEJO__server__HTTP_PORT=3000
       - FORGEJO__server__SSH_DOMAIN=${FORGEJO_HOST}
       # Port, der in den Clone-URLs angezeigt wird (= Host-Port)
