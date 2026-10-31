@@ -1,24 +1,56 @@
 services:
   docker-in-docker:
     image: docker:dind
-    container_name: 'docker_dind'
-    privileged: 'true'
-    command: ['dockerd', '-H', 'tcp://0.0.0.0:2375', '--tls=false']
-    restart: 'unless-stopped'
+    container_name: docker_dind
+    privileged: true
+    command: ["dockerd", "-H", "tcp://0.0.0.0:2375", "--tls=false"]
+    restart: unless-stopped
 
   runner:
-    image: 'data.forgejo.org/forgejo/runner:13'
-    links:
-      - docker-in-docker
+    image: data.forgejo.org/forgejo/runner:13
+    container_name: runner
     depends_on:
-      docker-in-docker:
-        condition: service_started
-    container_name: 'runner'
+      - docker-in-docker
+    user: "1001:1001"
     environment:
       DOCKER_HOST: tcp://docker-in-docker:2375
-    # User without root privileges, but with access to `./data`.
-    user: 1001:1001
+      FORGEJO_URL: https://git.deine-domain.de
+      RUNNER_TOKEN: DEIN_REGISTRIERUNGS_TOKEN
     volumes:
-      - ./data:/data
-    restart: 'unless-stopped'
-    command: 'forgejo-runner daemon --config runner-config.yml'
+      - ./data/runner:/data
+    working_dir: /data
+    configs:
+      - source: runner-config
+        target: /etc/forgejo-runner/config.yml
+    command: >
+      sh -c '
+        if [ ! -f /data/.runner ]; then
+          forgejo-runner register --no-interactive
+            --instance "$$FORGEJO_URL"
+            --token "$$RUNNER_TOKEN"
+            --name runner-1
+            --config /etc/forgejo-runner/config.yml;
+        fi;
+        exec forgejo-runner daemon --config /etc/forgejo-runner/config.yml
+      '
+    restart: unless-stopped
+
+configs:
+  runner-config:
+    content: |
+      log:
+        level: info
+      runner:
+        file: /data/.runner
+        capacity: 1
+        timeout: 3h
+        labels:
+          - "ubuntu-latest:docker://ghcr.io/catthehacker/ubuntu:act-22.04"
+          - "ubuntu-22.04:docker://ghcr.io/catthehacker/ubuntu:act-22.04"
+      cache:
+        enabled: true
+        dir: /data/.cache
+      container:
+        network: ""
+        privileged: false
+        docker_host: ""
