@@ -12,10 +12,10 @@ services:
     depends_on:
       - docker-in-docker
     user: "1001:1001"
-    environment:
-      DOCKER_HOST: tcp://docker-in-docker:2375
-      FORGEJO_URL: https://git.deine-domain.de
-      RUNNER_TOKEN: DEIN_REGISTRIERUNGS_TOKEN
+  environment:
+      DOCKER_HOST: ${DOCKER_HOST:-tcp://docker-in-docker:2375}
+      FORGEJO_URL: ${FORGEJO_URL:?FORGEJO_URL fehlt}
+      RUNNER_TOKEN: ${RUNNER_TOKEN:?RUNNER_TOKEN fehlt}
     volumes:
       - ./data/runner:/data
     working_dir: /data
