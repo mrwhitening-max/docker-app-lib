@@ -1,16 +1,22 @@
 services:
-  docker-in-docker:
+    docker-in-docker:
     image: docker:dind
     container_name: docker_dind
     privileged: true
     command: ["dockerd", "-H", "tcp://0.0.0.0:2375", "--tls=false"]
+    healthcheck:
+      test: ["CMD", "docker", "-H", "tcp://localhost:2375", "info"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
 
   runner:
     image: data.forgejo.org/forgejo/runner:13
     container_name: runner
     depends_on:
-      - docker-in-docker
+      docker-in-docker:
+        condition: service_healthy
     user: "1001:1001"
     environment:
       DOCKER_HOST: ${DOCKER_HOST:-tcp://docker-in-docker:2375}
@@ -51,7 +57,7 @@ configs:
       cache:
         enabled: true
         dir: /data/.cache
-      container:
+            container:
         network: ""
         privileged: false
-        docker_host: ""
+        docker_host: tcp://docker-in-docker:2375
