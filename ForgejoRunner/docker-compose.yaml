@@ -1,5 +1,5 @@
 services:
-    docker-in-docker:
+  docker-in-docker:
     image: docker:dind
     container_name: docker_dind
     privileged: true
@@ -19,27 +19,14 @@ services:
         condition: service_healthy
     user: "1001:1001"
     environment:
-      DOCKER_HOST: ${DOCKER_HOST:-tcp://docker-in-docker:2375}
-      FORGEJO_URL: ${FORGEJO_URL:?FORGEJO_URL fehlt}
-      RUNNER_TOKEN: ${RUNNER_TOKEN:?RUNNER_TOKEN fehlt}
+      DOCKER_HOST: tcp://docker-in-docker:2375
     volumes:
       - ./data/runner:/data
     working_dir: /data
     configs:
       - source: runner-config
         target: /etc/forgejo-runner/config.yml
-    command:
-      - sh
-      - -c
-      - |
-        if [ ! -f /data/.runner ]; then
-          forgejo-runner register --no-interactive \
-            --instance "$$FORGEJO_URL" \
-            --token "$$RUNNER_TOKEN" \
-            --name runner-1 \
-            --config /etc/forgejo-runner/config.yml
-        fi
-        exec forgejo-runner daemon --config /etc/forgejo-runner/config.yml
+    command: ["forgejo-runner", "daemon", "--config", "/etc/forgejo-runner/config.yml"]
     restart: unless-stopped
 
 configs:
@@ -48,7 +35,6 @@ configs:
       log:
         level: info
       runner:
-        file: /data/.runner
         capacity: 1
         timeout: 3h
         labels:
@@ -57,7 +43,13 @@ configs:
       cache:
         enabled: true
         dir: /data/.cache
-            container:
+      container:
         network: ""
         privileged: false
         docker_host: tcp://docker-in-docker:2375
+      server:
+        connections:
+          forgejo:
+            url: ${FORGEJO_URL:?FORGEJO_URL fehlt}
+            uuid: ${RUNNER_UUID:?RUNNER_UUID fehlt}
+            token: ${RUNNER_TOKEN:?RUNNER_TOKEN fehlt}
