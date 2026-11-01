@@ -23,14 +23,7 @@ services:
       - UI_PASSWORD=${UI_PASSWORD}
       - REDIS_HOST=${LITELLM_REDIS_HOST:-litellm_redis}
       - REDIS_PORT=${LITELLM_REDIS_PORT:-6379}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - OLLAMA_API_BASE=${OLLAMA_API_BASE}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GEMINI_API_KEY2=${GEMINI_API_KEY2}
-      - GEMINI_API_KEY3=${GEMINI_API_KEY3}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - OPENROUTER_API_KEY2=${OPENROUTER_API_KEY2}
-      - OPENROUTER_API_KEY3=${OPENROUTER_API_KEY3}
       - TYPESAFE_API_KEY=${TYPESAFE_API_KEY}
     env_file:
       - .env
@@ -95,10 +88,6 @@ configs:
           type: redis
 
       router_settings:
-        fallbacks:
-          - "gemini/gemini-2.0-flash-thinking-exp": ["openrouter/google/gemini-2.0-flash-thinking-exp:free"]
-          - "gemini/gemini-2.0-pro-exp-02-05": ["openrouter/google/gemini-2.0-pro-exp-02-05:free"]
-          - "gemini/gemini-2.0-flash": ["openrouter/google/gemini-2.0-flash-exp:free"]
         routing_strategy: usage-based-routing-v2
         redis_host: litellm_redis
         redis_port: 6379
