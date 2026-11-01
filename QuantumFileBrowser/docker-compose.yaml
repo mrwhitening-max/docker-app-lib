@@ -7,6 +7,7 @@ services:
       - "${FILEBROWSER_PORT:-3923}:3923"
     environment:
       - FILEBROWSER_ADMIN_PASSWORD=${FILEBROWSER_ADMIN_PASSWORD:?set FILEBROWSER_ADMIN_PASSWORD in .env}
+      - FILEBROWSER_CONFIG=/home/filebrowser/data/config.yaml
     volumes:
       - ./files:/files
       - ./data:/home/filebrowser/data
@@ -16,9 +17,6 @@ services:
         target: /shares
         bind:
           create_host_path: false
-    configs:
-      - source: filebrowser_config
-        target: /home/filebrowser/data/config.yaml
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3923/health"]
       interval: 30s
