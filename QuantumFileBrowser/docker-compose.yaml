@@ -35,7 +35,6 @@ configs:
       server:
         database:
           path: "/home/filebrowser/data/database.sqlite"
-          migrateFrom: "/home/filebrowser/data/database.db.old"
         sources:
           - path: /files
             name: Lokal
