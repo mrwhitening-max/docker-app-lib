@@ -72,9 +72,10 @@ configs:
             model: ollama/*
             api_base: os.environ/OLLAMA_API_BASE
 
-        - model_name: vercel/*
+        - model_name: jev
           litellm_params:
-            model: vercel_ai_gateway/*
+            model: typesafe/typesafe-ai/jev
+            api_base: https://ai-gateway.vercel.sh/typesafe
             api_key: os.environ/VERCEL_AI_GATEWAY_API_KEY
 
       general_settings:
