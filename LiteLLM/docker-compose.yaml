@@ -78,51 +78,6 @@ configs:
             model: ollama/*
             api_base: os.environ/OLLAMA_API_BASE
 
-        # ANTHROPIC CLAUDE
-        - model_name: claude/*
-          litellm_params:
-            model: anthropic/claude-opus-4-7
-            api_key: os.environ/ANTHROPIC_API_KEY
-        - model_name: claude/*
-          litellm_params:
-            model: anthropic/claude-sonnet-4-6
-            api_key: os.environ/ANTHROPIC_API_KEY
-        - model_name: claude/*
-          litellm_params:
-            model: anthropic/claude-haiku-4-5-20251001
-            api_key: os.environ/ANTHROPIC_API_KEY
-
-        # GEMINI
-        - model_name: gemini/*
-          litellm_params:
-            model: gemini/*
-            api_key: os.environ/GEMINI_API_KEY
-            drop_params: true
-        - model_name: gemini/*
-          litellm_params:
-            model: gemini/*
-            api_key: os.environ/GEMINI_API_KEY2
-            drop_params: true
-        - model_name: gemini/*
-          litellm_params:
-            model: gemini/*
-            api_key: os.environ/GEMINI_API_KEY3
-            drop_params: true
-
-        # Openrouter
-        - model_name: openrouter/*
-          litellm_params:
-            model: openrouter/*
-            api_key: os.environ/OPENROUTER_API_KEY
-        - model_name: openrouter/*
-          litellm_params:
-            model: openrouter/*
-            api_key: os.environ/OPENROUTER_API_KEY2
-        - model_name: openrouter/*
-          litellm_params:
-            model: openrouter/*
-            api_key: os.environ/OPENROUTER_API_KEY3
-
       general_settings:
         forward_openai_org_id: true
         store_prompts_in_spend_logs: true
