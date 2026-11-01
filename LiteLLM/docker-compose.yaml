@@ -77,6 +77,10 @@ configs:
             model: typesafe/typesafe-ai/jev
             api_base: https://ai-gateway.vercel.sh/typesafe
             api_key: os.environ/TYPESAFE_API_KEY
+            input_cost_per_token: 0.000000042
+            output_cost_per_token: 0
+          model_info:
+            mode: decisions
 
       general_settings:
         forward_openai_org_id: true
