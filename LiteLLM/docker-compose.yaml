@@ -73,7 +73,7 @@ configs:
             model: ollama/*
             api_base: os.environ/OLLAMA_API_BASE
 
-        - model_name: typesafe-ai/jev-TYPESAFE_VERSION
+        - model_name: typesafe-ai/jev-${TYPESAFE_VERSION}
           litellm_params:
             model: typesafe/typesafe-ai/jev
             api_base: https://ai-gateway.vercel.sh/typesafe
